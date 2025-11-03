@@ -1,0 +1,36 @@
+type Query {
+  health: String!
+}
+
+type Mutation {
+  upsertEntities(input: [EntityInput!]!): Boolean!
+  upsertRelationships(input: [RelationshipInput!]!): Boolean!
+}
+
+type Entity {
+  id: ID!
+  type: String!
+  attrs: JSON!
+}
+
+input EntityInput {
+  id: ID!
+  type: String!
+  attrs: JSON!
+}
+
+type Relationship {
+  type: String!
+  fromId: ID!
+  toId: ID!
+  attrs: JSON!
+}
+
+input RelationshipInput {
+  type: String!
+  fromId: ID!
+  toId: ID!
+  attrs: JSON!
+}
+
+scalar JSON

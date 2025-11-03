@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --surface: theme('colors.surface');
+  --panel: theme('colors.panel');
+  --accent: theme('colors.accent');
+  --muted: theme('colors.muted');
+}

@@ -1,0 +1,34 @@
+id: generic-telemetry
+version: 1.0
+category: telemetry
+connectors:
+  - name: radio-feed
+    protocol: kafka
+    topic: telemetry.events
+    cadence: stream
+    schema: schemas/event.schema.json
+normalize:
+  map:
+    id: $.event_id
+    ts: $.timestamp
+    entity_type: Event
+    attrs:
+      message: $.message
+      severity: $.severity
+      lat: $.geo.lat
+      lon: $.geo.lon
+enrich:
+  - name: geo_reverse
+  - name: keyword_match
+ontology:
+  entities: [Event, Location]
+  relationships:
+    - "Event NEAR Location"
+policy:
+  read_roles: [viewer, analyst, admin]
+  redactions:
+    - when: role==viewer
+      fields: [message]
+ui_modules:
+  - map
+  - list
