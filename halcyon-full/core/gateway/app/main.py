@@ -20,10 +20,7 @@ app = FastAPI(title="HALCYON Gateway", version="0.1.0")
 
 setup_tracing(app)
 
-# Add auth middleware
-app.add_middleware(AuthMiddleware)
-
-# Add CORS middleware
+# Add CORS middleware FIRST to ensure headers are added to all responses (including errors)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -31,6 +28,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add auth middleware AFTER CORS
+app.add_middleware(AuthMiddleware)
 
 ontology_client = OntologyClient()
 policy_client = PolicyClient()
