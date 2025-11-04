@@ -55,8 +55,25 @@ async def upsert_relationships(payload: list[RelationshipInstance], graph: Graph
 
 
 @router.get("/entities")
-async def get_entities(entity_type: str | None = None, graph: GraphStore = Depends(get_graph)):
-    entities = await graph.get_entities(entity_type)
+async def get_entities(
+    entity_type: str | None = None,
+    sort: str = "timestamp",
+    order: str = "desc",
+    limit: int | None = None,
+    cursor: str | None = None,
+    graph: GraphStore = Depends(get_graph)
+):
+    """
+    Get entities with sorting, ordering, limit, and cursor support.
+    Default: sort by timestamp desc (newest first).
+    """
+    entities = await graph.get_entities(
+        entity_type=entity_type,
+        sort=sort,
+        order=order,
+        limit=limit,
+        cursor=cursor
+    )
     return entities
 
 

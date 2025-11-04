@@ -103,16 +103,56 @@ class GraphStore:
             finally:
                 await tx.close()
 
-    async def get_entities(self, entity_type: str | None = None) -> list[dict]:
+    async def get_entities(
+        self,
+        entity_type: str | None = None,
+        sort: str = "timestamp",
+        order: str = "desc",
+        limit: int | None = None,
+        cursor: str | None = None
+    ) -> list[dict]:
+        """
+        Get entities with sorting, ordering, limit, and cursor support.
+        Default: sort by timestamp desc (newest first).
+        """
         async with self._driver.session() as session:
+            # Build base query
             if entity_type:
-                # Escape backticks in label (same as upsert_entities)
                 label = entity_type.replace('`', '``')
-                result = await session.run(
-                    f"MATCH (n:`{label}`) RETURN n.id as id, labels(n)[0] as type, properties(n) as attrs"
-                )
+                cypher = f"MATCH (n:`{label}`)"
             else:
-                result = await session.run("MATCH (n) RETURN n.id as id, labels(n)[0] as type, properties(n) as attrs")
+                cypher = "MATCH (n)"
+            
+            # Add WHERE clause for cursor (if provided, continue from cursor)
+            params = {}
+            if cursor:
+                # Cursor is expected to be the sort field value from last entity
+                # For timestamp-based cursor, continue where timestamp < cursor
+                if sort == "timestamp":
+                    cypher += " WHERE n.timestamp < $cursor"
+                    params["cursor"] = cursor
+                elif sort == "id":
+                    cypher += " WHERE n.id > $cursor"
+                    params["cursor"] = cursor
+            
+            # Build ORDER BY clause
+            # Sanitize sort field - only allow alphanumeric and underscore
+            safe_sort = "".join(c for c in sort if c.isalnum() or c == "_")
+            safe_order = "DESC" if order.lower() == "desc" else "ASC"
+            
+            # Default to timestamp desc if sort field doesn't exist in entities
+            cypher += f" RETURN n.id as id, labels(n)[0] as type, properties(n) as attrs, n.{safe_sort} as sort_value"
+            
+            # Use COALESCE to handle missing sort field (treat as old timestamp for timestamp sort)
+            if safe_sort == "timestamp":
+                cypher += f" ORDER BY COALESCE(n.{safe_sort}, '1970-01-01T00:00:00Z') {safe_order}, n.id {safe_order}"
+            else:
+                cypher += f" ORDER BY COALESCE(n.{safe_sort}, '') {safe_order}, n.id {safe_order}"
+            
+            if limit:
+                cypher += f" LIMIT {limit}"
+            
+            result = await session.run(cypher, **params)
             entities = []
             async for record in result:
                 attrs = dict(record["attrs"])
