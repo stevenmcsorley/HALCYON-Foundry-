@@ -79,14 +79,29 @@ async def verify_token(token: str) -> Optional[Dict]:
 
         discovery = await get_discovery_document()
         issuer = discovery.get("issuer")
-        audience = settings.keycloak_client_id
+        
+        # For Keycloak, tokens can have audience as:
+        # - UI client ID (halcyon-ui)
+        # - Realm name (halcyon-dev)
+        # - account (account service)
+        # - Gateway client ID (halcyon-gateway) if client-to-client tokens
+        # We accept any of these valid audiences
+        from .config import settings as config_settings
+        realm_name = config_settings.keycloak_realm
+        valid_audiences = [
+            "account",  # Keycloak account service
+            realm_name,  # Realm name
+            "halcyon-ui",  # UI client ID
+            config_settings.keycloak_client_id,  # Gateway client ID (for client-to-client)
+        ]
 
         payload = jwt.decode(
             token,
             signing_key,
             algorithms=[settings.jwt_algorithm],
-            audience=audience,
+            audience=valid_audiences,
             issuer=issuer,
+            options={"verify_aud": True},
         )
         return payload
     except Exception:
