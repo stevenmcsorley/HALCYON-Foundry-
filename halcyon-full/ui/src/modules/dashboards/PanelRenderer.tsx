@@ -45,7 +45,39 @@ export default function PanelRenderer({ type, query }: { type: PanelType; query:
   }
 
   if (type === 'metric') {
-    const val = (data && (data.value ?? data.result?.value ?? Object.values(data)[0])) ?? '—'
+    // Try various ways to extract a numeric value
+    let val: number | string = '—'
+    if (data) {
+      // Direct value
+      if (typeof data.value === 'number') {
+        val = data.value
+      }
+      // Nested result.value
+      else if (data.result?.value && typeof data.result.value === 'number') {
+        val = data.result.value
+      }
+      // Count of array results
+      else if (Array.isArray(data.entities)) {
+        val = data.entities.length
+      }
+      else if (Array.isArray(data.relationships)) {
+        val = data.relationships.length
+      }
+      // Count first array value in data
+      else {
+        const firstArray = Object.values(data).find(v => Array.isArray(v)) as any[]
+        if (firstArray) {
+          val = firstArray.length
+        }
+        // Fallback to first value
+        else {
+          const firstVal = Object.values(data)[0]
+          if (firstVal !== undefined && firstVal !== null) {
+            val = String(firstVal)
+          }
+        }
+      }
+    }
     return (
       <div className="text-center p-4">
         <div className="text-3xl font-bold text-white">{String(val)}</div>
