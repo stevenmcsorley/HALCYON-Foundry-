@@ -30,10 +30,14 @@ export const GraphPanel: React.FC = () => {
   }, [entities, relationships])
 
   return (
-    <Card title="Graph">
-      {(relLoading || entLoading) && <div className="text-sm text-muted mb-2">Loading...</div>}
-      {relError && <div className="text-sm text-red-400 mb-2">Error: {relError}</div>}
-      <GraphCanvas elements={elements} />
+    <Card title="Graph" className="h-full">
+      {(relLoading || entLoading) && <div className="text-sm text-muted mb-2 flex-shrink-0 px-3">Loading...</div>}
+      {relError && <div className="text-sm text-red-400 mb-2 flex-shrink-0 px-3">Error: {relError}</div>}
+      {!relLoading && !entLoading && (
+        <div className="flex-1 min-h-0 p-3 pt-0">
+          <GraphCanvas elements={elements} />
+        </div>
+      )}
     </Card>
   )
 }

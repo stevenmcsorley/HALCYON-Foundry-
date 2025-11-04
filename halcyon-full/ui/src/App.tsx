@@ -78,20 +78,18 @@ export default function App() {
 
       {activeTab === 'console' && (
         <>
-          <div className="grid grid-cols-2 h-[calc(100vh-8rem)]">
-            <div className="border-r border-white/10">
+          <div className="grid grid-cols-2 grid-rows-2 h-[calc(100vh-8rem)] gap-4 p-4">
+            <div className="border-r border-white/10 pr-4 flex flex-col min-h-0">
               <MapPanel />
             </div>
-            <div>
+            <div className="pl-4 flex flex-col min-h-0">
               <GraphPanel />
             </div>
-          </div>
-          
-          <div className="grid grid-cols-2 border-t border-white/10 h-[calc(100vh-8rem)]">
-            <div className="border-r border-white/10">
+            
+            <div className="border-r border-white/10 pr-4 flex flex-col min-h-0 border-t border-white/10 pt-4">
               <ListPanel />
             </div>
-            <div>
+            <div className="pl-4 flex flex-col min-h-0 border-t border-white/10 pt-4">
               <TimelinePanel />
             </div>
           </div>

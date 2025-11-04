@@ -39,5 +39,5 @@ export default function GraphCanvas({ elements }:{ elements:Elem }) {
     }
   }), [])
 
-  return <div ref={ref} className="h-72 rounded-lg bg-black/20" />
+  return <div ref={ref} className="flex-1 rounded-lg bg-black/20 min-h-0" />
 }
