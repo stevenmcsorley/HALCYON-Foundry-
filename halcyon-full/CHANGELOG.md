@@ -38,3 +38,48 @@ All notable changes to HALCYON Foundry Core will be documented in this file.
 - Auth integration (Keycloak JWT verification and role extraction)
 - Performance optimizations (debouncing, virtual scrolling for large datasets)
 - Additional visualizations (relationship filters, entity type legends)
+
+
+## Phase 3: Observability, Auth Integration, and Playback (2025-01-XX)
+
+### Observability Foundation
+- **Structured JSON Logging**: All services now emit structured JSON logs with fields: ts, level, svc, msg, traceId, userId
+- **Health Checks**: Added `/health` (liveness) and `/health/ready` (readiness with dependency checks) endpoints to all services
+- **Prometheus Metrics**: All services expose `/metrics` endpoints with:
+  - HTTP request duration histograms
+  - WebSocket connection gauges (Gateway)
+  - Entity/relationship upsert counters
+  - Policy evaluation duration (Gateway)
+- **Prometheus & Grafana**: Added to docker-compose with:
+  - Prometheus scrape configuration for all services
+  - Grafana datasource provisioning
+  - Basic overview dashboard
+- **OpenTelemetry Tracing**: Distributed tracing enabled across all services:
+  - FastAPI and httpx instrumentation
+  - OTLP export to Jaeger
+  - Trace context propagation
+
+### Auth Integration (Keycloak OIDC)
+- **Keycloak Service**: Added to docker-compose with dev realm (halcyon-dev)
+- **Gateway JWT Middleware**: OIDC discovery, JWKS cache, JWT verification
+- **Role-Based Access Control**: Roles extracted from token (realm_access, resource_access) and passed to OPA
+- **UI Authentication**: 
+  - Login/logout functionality with Keycloak OIDC
+  - Zustand authStore for state management
+  - LoginForm and UserMenu components
+  - Route guarding with DEV_MODE fallback for local development
+- **GraphQL Context**: Resolvers updated to read roles from context["user"] instead of X-Roles header
+
+### Playback System (Timeline Replay)
+- **Event Playback API**: `GET /events/playback` endpoint with time range filtering
+- **Point-in-Time Queries**: `GET /graph/at` endpoint for lightweight state snapshots
+- **Automatic Timestamps**: Server-generated ISO timestamps added to all entities/relationships during upsert
+- **Playback Controls**: 
+  - Play/pause, speed control (0.25x to 4x), seek slider
+  - Time range selector for setting playback bounds
+- **Timeline Integration**: 
+  - Visual scrubber with current time indicator (yellow line)
+  - Clickable timeline bars for seeking
+  - Highlighted bars at cursor position
+- **Playback Hook**: Automatic cursor advancement based on playback speed
+
