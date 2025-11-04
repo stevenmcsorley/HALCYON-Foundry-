@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import * as auth from '@/services/auth'
 
 export type SavedQuery = {
   id: string
@@ -33,63 +34,79 @@ export type Dashboard = {
 const API = import.meta.env.VITE_GATEWAY_URL?.replace(/\/graphql\/?$/, '') || 'http://localhost:8088'
 
 async function j<T>(res: Response): Promise<T> {
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+  if (!res.ok) {
+    // Handle 401 by attempting refresh (similar to api.ts)
+    if (res.status === 401) {
+      try {
+        await auth.refresh()
+        // Don't retry automatically here - let caller retry if needed
+      } catch {
+        // Refresh failed - will be handled by caller or auth service
+      }
+    }
+    throw new Error(`${res.status} ${res.statusText}`)
+  }
   return res.json()
+}
+
+function getAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const token = auth.getToken()
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  return headers
 }
 
 export const savedApi = {
   getQueries: (): Promise<SavedQuery[]> => 
-    fetch(`${API}/saved-queries`, { credentials: 'include' }).then(j),
+    fetch(`${API}/saved-queries`, { headers: getAuthHeaders() }).then(j),
   
   createQuery: (q: Pick<SavedQuery, 'name' | 'gql'>): Promise<SavedQuery> =>
     fetch(`${API}/saved-queries`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(q),
-      credentials: 'include'
     }).then(j),
   
   updateQuery: (id: string, p: Partial<SavedQuery>): Promise<SavedQuery> =>
     fetch(`${API}/saved-queries/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(p),
-      credentials: 'include'
     }).then(j),
   
   deleteQuery: (id: string): Promise<void> =>
     fetch(`${API}/saved-queries/${id}`, {
       method: 'DELETE',
-      credentials: 'include'
+      headers: getAuthHeaders(),
     }).then(() => undefined),
 
   getDashboards: (): Promise<Dashboard[]> => 
-    fetch(`${API}/dashboards`, { credentials: 'include' }).then(j),
+    fetch(`${API}/dashboards`, { headers: getAuthHeaders() }).then(j),
   
   createDashboard: (d: Pick<Dashboard, 'name'>): Promise<Dashboard> =>
     fetch(`${API}/dashboards`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(d),
-      credentials: 'include'
     }).then(j),
   
   updateDashboard: (id: string, p: Partial<Dashboard>): Promise<Dashboard> =>
     fetch(`${API}/dashboards/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(p),
-      credentials: 'include'
     }).then(j),
   
   deleteDashboard: (id: string): Promise<void> =>
     fetch(`${API}/dashboards/${id}`, {
       method: 'DELETE',
-      credentials: 'include'
+      headers: getAuthHeaders(),
     }).then(() => undefined),
 
   getDashboard: (id: string): Promise<Dashboard & { panels: DashboardPanel[] }> =>
-    fetch(`${API}/dashboards/${id}`, { credentials: 'include' }).then(j).then((d: any) => ({
+    fetch(`${API}/dashboards/${id}`, { headers: getAuthHeaders() }).then(j).then((d: any) => ({
       ...d,
       panels: (d.panels || []).map((p: any) => ({
         ...p,
@@ -102,7 +119,7 @@ export const savedApi = {
   createPanel: (dashboardId: string, p: Omit<DashboardPanel, 'id' | 'dashboardId'>): Promise<DashboardPanel> =>
     fetch(`${API}/dashboards/${dashboardId}/panels`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         title: p.title,
         type: p.type,
@@ -113,7 +130,6 @@ export const savedApi = {
           refreshSec: p.refreshSec,
         },
       }),
-      credentials: 'include'
     }).then(j).then((resp: any) => ({
       ...resp,
       queryId: resp.config?.queryId || resp.config_json?.queryId,
@@ -124,7 +140,7 @@ export const savedApi = {
   updatePanel: (dashboardId: string, panelId: string, p: Partial<DashboardPanel>): Promise<DashboardPanel> =>
     fetch(`${API}/dashboards/${dashboardId}/panels/${panelId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         ...(p.title !== undefined && { title: p.title }),
         ...(p.type !== undefined && { type: p.type }),
@@ -137,7 +153,6 @@ export const savedApi = {
           },
         }),
       }),
-      credentials: 'include'
     }).then(j).then((resp: any) => ({
       ...resp,
       queryId: resp.config?.queryId || resp.config_json?.queryId,
@@ -148,7 +163,7 @@ export const savedApi = {
   deletePanel: (dashboardId: string, panelId: string): Promise<void> =>
     fetch(`${API}/dashboards/${dashboardId}/panels/${panelId}`, {
       method: 'DELETE',
-      credentials: 'include'
+      headers: getAuthHeaders(),
     }).then(() => undefined),
 }
 
