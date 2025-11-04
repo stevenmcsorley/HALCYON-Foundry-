@@ -121,6 +121,7 @@ export const savedApi = {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({
+        dashboard_id: dashboardId,
         title: p.title,
         type: p.type,
         position: p.position ?? 0,
