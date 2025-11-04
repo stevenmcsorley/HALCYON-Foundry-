@@ -8,6 +8,8 @@ type Query {
   savedQuery(id: ID!): SavedQuery
   dashboards: [Dashboard!]!
   dashboard(id: ID!): DashboardWithPanels
+  alertRules: [AlertRule!]!
+  alerts(status: String, severity: String): [Alert!]!
 }
 
 type Mutation {
@@ -22,6 +24,11 @@ type Mutation {
   createPanel(dashboardId: ID!, input: PanelInput!): Panel!
   updatePanel(dashboardId: ID!, panelId: ID!, input: PanelUpdateInput!): Panel!
   deletePanel(dashboardId: ID!, panelId: ID!): Boolean!
+  createAlertRule(input: AlertRuleInput!): AlertRule!
+  updateAlertRule(id: ID!, input: AlertRuleInput!): AlertRule!
+  deleteAlertRule(id: ID!): Boolean!
+  acknowledgeAlert(id: ID!): Alert!
+  resolveAlert(id: ID!): Alert!
 }
 
 type Entity {
@@ -122,4 +129,46 @@ input PanelUpdateInput {
   type: String
   config: JSON
   position: Int
+}
+
+scalar JSON
+
+type AlertRule {
+  id: ID!
+  name: String!
+  description: String
+  conditionJson: JSON!
+  severity: String!
+  actionsJson: JSON
+  enabled: Boolean!
+  createdAt: String!
+  createdBy: String
+}
+
+type Alert {
+  id: ID!
+  ruleId: ID!
+  entityId: String
+  message: String!
+  severity: String!
+  status: String!
+  createdAt: String!
+  acknowledgedAt: String
+  resolvedAt: String
+  acknowledgedBy: String
+  resolvedBy: String
+}
+
+input ActionConfigInput {
+  type: String!
+  config: JSON
+}
+
+input AlertRuleInput {
+  name: String!
+  description: String
+  conditionJson: JSON!
+  severity: String!
+  actionsJson: [ActionConfigInput!]
+  enabled: Boolean!
 }

@@ -8,10 +8,12 @@ from .clients import OntologyClient, PolicyClient
 from .resolvers import query, mutation
 from .resolvers_fed import fed_query
 from .resolvers_saved import saved_query as saved_query_resolver, saved_mutation
+from .resolvers_alerts import alerts_query, alerts_mutation
 from .ws_pubsub import register_ws
 from .health import router as health_router
 from .routes_federation import router as federation_router
 from .routes_saved import router as saved_queries_router, dashboard_router
+from .routes_alerts import router as alerts_router
 from .db import init_db, close_pool
 from .logging import setup_logging
 from .tracing import setup_tracing
@@ -22,8 +24,8 @@ setup_logging()
 type_defs = load_schema_from_path("app/schema.graphql")
 schema = make_executable_schema(
     type_defs,
-    [query, fed_query, saved_query_resolver],
-    [mutation, saved_mutation]
+    [query, fed_query, saved_query_resolver, alerts_query],
+    [mutation, saved_mutation, alerts_mutation]
 )
 
 app = FastAPI(title="HALCYON Gateway", version="0.1.0")
@@ -91,6 +93,7 @@ app.include_router(health_router)
 app.include_router(federation_router)
 app.include_router(saved_queries_router)
 app.include_router(dashboard_router)
+app.include_router(alerts_router)
 
 @app.on_event("startup")
 async def startup():
