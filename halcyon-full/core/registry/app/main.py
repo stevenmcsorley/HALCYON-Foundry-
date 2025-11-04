@@ -38,23 +38,28 @@ webhook_router = APIRouter(prefix="/webhooks")
 
 async def register_plugin(manifest_path: str):
     """Register plugin ontology entities/relationships."""
-    with open(manifest_path, "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    
-    # Register ontology if present
-    ontology_section = data.get("ontology", {})
-    if ontology_section:
-        ents = [{"name": e, "attributes": []} for e in ontology_section.get("entities", [])]
-        rels = []
-        for rel in ontology_section.get("relationships", []):
-            # "A TYPE B"
-            parts = rel.split()
-            if len(parts) >= 3:
-                rels.append({"name": parts[1], "from_entity": parts[0], "to_entity": parts[2], "directed": True, "attributes": []})
-        patch = {"add_entities": ents, "add_relationships": rels}
-        async with httpx.AsyncClient(base_url=settings.ontology_base_url, timeout=20) as c:
-            r = await c.post("/ontology/patch", json=patch)
-            r.raise_for_status()
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        
+        # Register ontology if present
+        ontology_section = data.get("ontology", {})
+        if ontology_section:
+            ents = [{"name": e, "attributes": []} for e in ontology_section.get("entities", [])]
+            rels = []
+            for rel in ontology_section.get("relationships", []):
+                # "A TYPE B"
+                parts = rel.split()
+                if len(parts) >= 3:
+                    rels.append({"name": parts[1], "from_entity": parts[0], "to_entity": parts[2], "directed": True, "attributes": []})
+            patch = {"add_entities": ents, "add_relationships": rels}
+            async with httpx.AsyncClient(base_url=settings.ontology_base_url, timeout=20) as c:
+                r = await c.post("/ontology/patch", json=patch)
+                r.raise_for_status()
+                logger.info(f"Registered ontology for plugin: {manifest_path}")
+    except Exception as e:
+        logger.warning(f"Failed to register ontology for {manifest_path}: {e}")
+        # Don't fail completely - connectors can still work without ontology registration
 
 
 def load_connector(plugin_data: Dict[str, Any], plugin_id: str) -> Optional[Any]:

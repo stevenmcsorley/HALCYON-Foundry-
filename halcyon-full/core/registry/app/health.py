@@ -1,16 +1,22 @@
 import httpx
 from fastapi import APIRouter, Response
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
-from .main import settings
+from pydantic_settings import BaseSettings
 
 router = APIRouter()
+
+# Import settings directly to avoid circular import
+class HealthSettings(BaseSettings):
+    ontology_base_url: str = "http://ontology:8081"
+
+health_settings = HealthSettings()
 
 
 async def check_ontology() -> dict:
     """Check Ontology service."""
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
-            r = await client.get(f"{settings.ontology_base_url}/health")
+            r = await client.get(f"{health_settings.ontology_base_url}/health")
             if r.status_code == 200:
                 return {"status": "ok"}
             return {"status": "down", "error": f"HTTP {r.status_code}"}
