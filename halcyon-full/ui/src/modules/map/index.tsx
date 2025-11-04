@@ -20,9 +20,9 @@ export const MapPanel: React.FC = () => {
   }, [entities])
 
   return (
-    <Card title="Map" className="h-full">
-      {loading && <div className="text-sm text-muted mb-2 flex-shrink-0 px-3">Loading...</div>}
-      {error && <div className="text-sm text-red-400 mb-2 flex-shrink-0 px-3">Error: {error}</div>}
+    <Card title="Map">
+      {loading && <div className="text-sm text-muted mb-2 flex-shrink-0 p-3 pb-0">Loading...</div>}
+      {error && <div className="text-sm text-red-400 mb-2 flex-shrink-0 p-3 pb-0">Error: {error}</div>}
       {!loading && !error && (
         <div className="flex-1 min-h-0 p-3 pt-0">
           <MapCanvas locations={locations} />

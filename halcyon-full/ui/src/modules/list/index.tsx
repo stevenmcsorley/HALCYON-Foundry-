@@ -18,12 +18,12 @@ export const ListPanel: React.FC = () => {
   const totalPages = Math.ceil(entities.length / ITEMS_PER_PAGE)
 
   return (
-    <Card title="Entities" className="h-full">
-      {loading && <div className="text-sm text-muted flex-shrink-0">Loading...</div>}
-      {error && <div className="text-sm text-red-400 flex-shrink-0">Error: {error}</div>}
+    <Card title="Entities">
+      {loading && <div className="text-sm text-muted flex-shrink-0 p-3 pb-0">Loading...</div>}
+      {error && <div className="text-sm text-red-400 flex-shrink-0 p-3 pb-0">Error: {error}</div>}
       {!loading && !error && (
         <>
-          <div className="flex-1 min-h-0 overflow-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto p-3 pt-0">
             <ul className="space-y-2 text-sm">
               {paginatedEntities.length === 0 ? (
                 <li className="opacity-70">No entities found. Run the seed script to add sample data.</li>
@@ -46,7 +46,7 @@ export const ListPanel: React.FC = () => {
             </ul>
           </div>
           {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/10 flex-shrink-0">
+            <div className="flex items-center justify-between p-3 pt-0 mt-2 border-t border-white/10 flex-shrink-0">
               <div className="text-xs text-muted">
                 Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1}-{Math.min(currentPage * ITEMS_PER_PAGE, entities.length)} of {entities.length}
               </div>
