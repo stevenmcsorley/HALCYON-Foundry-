@@ -1,7 +1,10 @@
 const KEYCLOAK_URL = import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8089'
 const KEYCLOAK_REALM = import.meta.env.VITE_KEYCLOAK_REALM || 'halcyon-dev'
 const KEYCLOAK_CLIENT_ID = import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'halcyon-ui'
-const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true' || import.meta.env.VITE_DEV_MODE === '1'
+// Default to DEV_MODE=true for local development (bypass Keycloak)
+// In Vite, undefined env vars become empty string, so check for that too
+const devModeEnv = import.meta.env.VITE_DEV_MODE
+const DEV_MODE = !devModeEnv || devModeEnv === 'true' || devModeEnv === '1'
 
 const DISCOVERY_URL = `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/.well-known/openid-configuration`
 const TOKEN_KEY = 'halcyon_token'

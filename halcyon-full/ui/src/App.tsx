@@ -9,7 +9,8 @@ import UserMenu from './components/UserMenu'
 import { useAuthStore } from './store/authStore'
 import * as auth from './services/auth'
 
-const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true' || import.meta.env.VITE_DEV_MODE === '1'
+// Default to DEV_MODE=true for local development (bypass Keycloak)
+const DEV_MODE = import.meta.env.VITE_DEV_MODE === undefined || import.meta.env.VITE_DEV_MODE === 'true' || import.meta.env.VITE_DEV_MODE === '1'
 
 export default function App() {
   const { user, initialize } = useAuthStore()
