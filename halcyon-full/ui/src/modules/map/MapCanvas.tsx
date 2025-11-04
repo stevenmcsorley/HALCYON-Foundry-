@@ -14,11 +14,28 @@ export default function MapCanvas({ locations }:{ locations:Loc[] }) {
   const styleUrl = import.meta.env.VITE_MAP_STYLE_URL ?? 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
 
   useEffect(() => {
-    if (map.current || !wrap.current) {
-      map.current?.resize(); return
+    if (!wrap.current) return
+    
+    if (map.current) {
+      // Map already exists, just resize it
+      setTimeout(() => map.current?.resize(), 100)
+      return
     }
-    map.current = new maplibregl.Map({ container: wrap.current, style: styleUrl, center: [-4.25, 55.86], zoom: 10 })
-    map.current.addControl(new maplibregl.NavigationControl(), 'top-right')
+    
+    // Wait a bit for container to have dimensions
+    const initMap = () => {
+      if (!wrap.current) return
+      map.current = new maplibregl.Map({ 
+        container: wrap.current, 
+        style: styleUrl, 
+        center: [-4.25, 55.86], 
+        zoom: 10 
+      })
+      map.current.addControl(new maplibregl.NavigationControl(), 'top-right')
+    }
+    
+    // Try immediate init, fallback to timeout
+    setTimeout(initMap, 50)
   }, [styleUrl])
 
   const renderMarkers = useCallback(() => {

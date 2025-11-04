@@ -11,17 +11,34 @@ export default function GraphCanvas({ elements }:{ elements:Elem }) {
   const setSel = useSelectionStore(s=>s.set)
 
   useEffect(() => {
-    if (cyRef.current || !ref.current) return
-    cyRef.current = cytoscape({ container: ref.current, style: [
-      { selector: 'node', style: { 'background-color':'#22d3ee', 'label':'data(label)', 'color':'#cbd5e1', 'font-size':12 } },
-      { selector: 'edge', style: { 'line-color':'#64748b', 'target-arrow-color':'#64748b', 'target-arrow-shape':'triangle', 'curve-style':'bezier', 'label':'data(label)', 'font-size':10, 'text-rotation':'autorotate' } },
-      { selector: '.selected', style: { 'border-width': 4, 'border-color':'#fff' } }
-    ]})
-    cyRef.current.on('tap', 'node', (ev) => {
-      const id = ev.target.id(); const type = ev.target.data('type')
-      setSel({ id, type })
-      cyRef.current!.elements().removeClass('selected'); ev.target.addClass('selected')
-    })
+    if (!ref.current) return
+    
+    if (cyRef.current) {
+      // Graph already exists, just resize it
+      setTimeout(() => cyRef.current?.resize(), 100)
+      return
+    }
+    
+    // Wait a bit for container to have dimensions
+    const initGraph = () => {
+      if (!ref.current || cyRef.current) return
+      cyRef.current = cytoscape({ 
+        container: ref.current, 
+        style: [
+          { selector: 'node', style: { 'background-color':'#22d3ee', 'label':'data(label)', 'color':'#cbd5e1', 'font-size':12 } },
+          { selector: 'edge', style: { 'line-color':'#64748b', 'target-arrow-color':'#64748b', 'target-arrow-shape':'triangle', 'curve-style':'bezier', 'label':'data(label)', 'font-size':10, 'text-rotation':'autorotate' } },
+          { selector: '.selected', style: { 'border-width': 4, 'border-color':'#fff' } }
+        ]
+      })
+      cyRef.current.on('tap', 'node', (ev) => {
+        const id = ev.target.id(); const type = ev.target.data('type')
+        setSel({ id, type })
+        cyRef.current!.elements().removeClass('selected'); ev.target.addClass('selected')
+      })
+    }
+    
+    // Try immediate init, fallback to timeout
+    setTimeout(initGraph, 50)
   }, [setSel])
 
   useEffect(() => {
