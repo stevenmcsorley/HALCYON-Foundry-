@@ -7,15 +7,17 @@ import { TimelinePanel } from '@/modules/timeline'
 import { gql } from '@/services/api'
 import { Card } from '@/components/Card'
 
-export default function PanelRenderer({ type, query }: { type: PanelType; query: SavedQuery }) {
+export default function PanelRenderer({ type, query, refreshSec = 30 }: { type: PanelType; query: SavedQuery; refreshSec?: number }) {
   const [data, setData] = React.useState<any>(null)
   const [error, setError] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    ;(async () => {
+    let intervalId: number | undefined
+
+    const fetchData = async () => {
+      setLoading(true)
       try {
         const result = await gql<any>(query.gql, {})
         if (!cancelled) {
@@ -30,11 +32,20 @@ export default function PanelRenderer({ type, query }: { type: PanelType; query:
           setLoading(false)
         }
       }
-    })()
+    }
+
+    fetchData()
+
+    // Set up refresh interval
+    if (refreshSec && refreshSec >= 5) {
+      intervalId = window.setInterval(fetchData, refreshSec * 1000)
+    }
+
     return () => {
       cancelled = true
+      if (intervalId) clearInterval(intervalId)
     }
-  }, [query.gql])
+  }, [query.gql, refreshSec])
 
   if (loading) {
     return <div className="text-sm text-muted p-4">Loading...</div>
