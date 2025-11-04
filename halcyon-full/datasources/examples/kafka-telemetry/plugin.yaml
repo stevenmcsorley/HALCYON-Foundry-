@@ -1,0 +1,21 @@
+id: kafka-telemetry
+version: 1
+kind: kafka
+
+# Kafka topic to consume from
+topic: telemetry-events
+
+# Mapping rules: raw JSON → HALCYON entity
+mapping:
+  entity_type: Event
+  id: "$.id"
+  attrs:
+    message: "$.message"
+    timestamp: "$.timestamp"
+    device_id: "$.device_id"
+    metric: "$.metric"
+    value: "$.value"
+
+# Optional: enrichment steps
+enrich:
+  - "geo_reverse"

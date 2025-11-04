@@ -1,0 +1,28 @@
+id: http-weather
+version: 1
+kind: http_poller
+
+# HTTP endpoint to poll
+endpoint: https://api.openweathermap.org/data/2.5/weather?q=London&appid=${API_KEY}
+
+# Poll schedule
+schedule: "every 60s"
+
+# Mapping rules: raw JSON → HALCYON entity
+mapping:
+  entity_type: Event
+  id: "$.id"  # Use weather.id if available, otherwise fallback to hash
+  attrs:
+    message: "$.weather[0].description"
+    timestamp: "$.dt"
+    location: "$.name"
+    temperature: "$.main.temp"
+    humidity: "$.main.humidity"
+
+# Optional: enrichment steps
+enrich:
+  - "geo_reverse"
+
+# Secrets to load from environment
+secrets:
+  - "API_KEY"

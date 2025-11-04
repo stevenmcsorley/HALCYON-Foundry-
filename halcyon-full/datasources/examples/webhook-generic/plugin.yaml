@@ -1,0 +1,17 @@
+id: webhook-generic
+version: 1
+kind: webhook
+
+# Mapping rules: raw JSON → HALCYON entity
+mapping:
+  entity_type: Event
+  id: "$.id"
+  attrs:
+    message: "$.msg"
+    timestamp: "$.ts"
+    source: "$.source"
+    severity: "$.severity"
+
+# Optional: enrichment steps
+enrich:
+  - "geo_reverse"
