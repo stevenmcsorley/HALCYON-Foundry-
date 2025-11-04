@@ -113,8 +113,17 @@ export default function GraphCanvas({ elements }:{ elements:Elem }) {
   return (
     <div 
       ref={containerRef} 
-      className="w-full h-full rounded-lg bg-black/20"
-      style={{ minHeight: '300px' }}
+      className="rounded-lg bg-black/20"
+      style={{ 
+        width: '100%', 
+        height: '100%', 
+        minHeight: '300px',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0
+      }}
     />
   )
 }
