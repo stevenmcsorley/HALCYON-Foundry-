@@ -11,16 +11,22 @@ type Elem = { nodes:any[]; edges:any[] }
 export default function GraphCanvas({ 
   elements,
   followLive = false,
-  latestEntity = null
+  latestEntity = null,
+  layout = 'breadthfirst',
+  showEdgeLabels = true
 }: { 
-  elements: Elem
+  elements: Elem & { totalFiltered?: number; hasMore?: boolean }
   followLive?: boolean
   latestEntity?: any
+  layout?: 'breadthfirst' | 'cose'
+  showEdgeLabels?: boolean
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<Core | null>(null)
   const [initialized, setInitialized] = useState(false)
+  const selectedNodeId = useRef<string | null>(null)
   const setSel = useSelectionStore(s => s.set)
+  const layoutTimeoutRef = useRef<number | null>(null)
 
   // Initialize Cytoscape ONCE when container is ready
   useEffect(() => {
@@ -48,10 +54,17 @@ export default function GraphCanvas({
             { selector: '.selected', style: { 'border-width': 4, 'border-color': '#fff' } }
           ]
         })
+        
+        // Update edge label visibility based on showEdgeLabels prop
+        cy.style()
+          .selector('edge')
+          .style('label', showEdgeLabels ? 'data(label)' : '')
+          .update()
 
         cy.on('tap', 'node', (evt: any) => {
           const id = evt.target.id()
           const type = evt.target.data('type')
+          selectedNodeId.current = id
           setSel({ id, type })
           cy.elements().removeClass('selected')
           evt.target.addClass('selected')
@@ -68,20 +81,61 @@ export default function GraphCanvas({
     setTimeout(checkAndInit, 50)
   }, [initialized, setSel])
 
-  // Update elements when they change
+  // Update edge label visibility
+  useEffect(() => {
+    if (!cyRef.current || !initialized) return
+    try {
+      cyRef.current.style()
+        .selector('edge')
+        .style('label', showEdgeLabels ? 'data(label)' : '')
+        .update()
+    } catch (err) {
+      console.error('Failed to update edge labels:', err)
+    }
+  }, [showEdgeLabels, initialized])
+
+  // Update elements when they change (debounced)
   useEffect(() => {
     if (!cyRef.current || !initialized) return
 
-    try {
-      cyRef.current.elements().remove()
-      if (elements.nodes.length > 0 || elements.edges.length > 0) {
-        cyRef.current.add([...elements.nodes, ...elements.edges])
-        cyRef.current.layout({ name: 'breadthfirst', animate: false }).run()
-      }
-    } catch (err) {
-      console.error('Failed to update graph:', err)
+    // Debounce updates (500ms)
+    if (layoutTimeoutRef.current) {
+      clearTimeout(layoutTimeoutRef.current)
     }
-  }, [elements, initialized])
+
+    layoutTimeoutRef.current = window.setTimeout(() => {
+      if (!cyRef.current) return
+      
+      try {
+        // Remember selected node
+        const selectedId = selectedNodeId.current
+        
+        cyRef.current.elements().remove()
+        if (elements.nodes.length > 0 || elements.edges.length > 0) {
+          cyRef.current.add([...elements.nodes, ...elements.edges])
+          
+          // Restore selection
+          if (selectedId) {
+            const node = cyRef.current.getElementById(selectedId)
+            if (node && node.nonempty()) {
+              node.addClass('selected')
+            }
+          }
+          
+          // Apply layout
+          cyRef.current.layout({ name: layout, animate: true, animationDuration: 500 }).run()
+        }
+      } catch (err) {
+        console.error('Failed to update graph:', err)
+      }
+    }, 500)
+
+    return () => {
+      if (layoutTimeoutRef.current) {
+        clearTimeout(layoutTimeoutRef.current)
+      }
+    }
+  }, [elements, layout, initialized])
 
   // Handle resize
   useEffect(() => {
