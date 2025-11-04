@@ -1,6 +1,8 @@
 import React from 'react'
 import { useSavedStore, savedApi } from '@/store/savedStore'
 import { gql } from '@/services/api'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { ErrorDialog } from '@/components/ErrorDialog'
 
 export default function SavedQueriesPanel() {
   const { queries, loadQueries } = useSavedStore()
@@ -8,6 +10,10 @@ export default function SavedQueriesPanel() {
   const [text, setText] = React.useState('query { health }')
   const [busy, setBusy] = React.useState(false)
   const [runOut, setRunOut] = React.useState<any>(null)
+  const [confirmOpen, setConfirmOpen] = React.useState(false)
+  const [confirmAction, setConfirmAction] = React.useState<(() => void) | null>(null)
+  const [errorOpen, setErrorOpen] = React.useState(false)
+  const [errorMessage, setErrorMessage] = React.useState('')
 
   React.useEffect(() => {
     loadQueries()
@@ -21,7 +27,8 @@ export default function SavedQueriesPanel() {
       setName('')
       setText('query { health }')
     } catch (e: any) {
-      alert(`Error: ${e.message}`)
+      setErrorMessage(`Error: ${e.message}`)
+      setErrorOpen(true)
     } finally {
       setBusy(false)
     }
@@ -33,9 +40,30 @@ export default function SavedQueriesPanel() {
       const data = await gql<any>(q, {})
       setRunOut(data)
     } catch (e: any) {
-      alert(`Error: ${e.message}`)
+      setErrorMessage(`Error: ${e.message}`)
+      setErrorOpen(true)
     } finally {
       setBusy(false)
+    }
+  }
+
+  const deleteQuery = (id: string) => {
+    setConfirmAction(() => async () => {
+      try {
+        await savedApi.deleteQuery(id)
+        await loadQueries()
+      } catch (e: any) {
+        setErrorMessage(`Error: ${e.message}`)
+        setErrorOpen(true)
+      }
+    })
+    setConfirmOpen(true)
+  }
+
+  const handleConfirm = () => {
+    if (confirmAction) {
+      confirmAction()
+      setConfirmAction(null)
     }
   }
 
@@ -85,12 +113,7 @@ export default function SavedQueriesPanel() {
               </button>
               <button
                 className="text-xs opacity-80 hover:opacity-100 text-white"
-                onClick={async () => {
-                  if (confirm('Delete this query?')) {
-                    await savedApi.deleteQuery(q.id)
-                    await loadQueries()
-                  }
-                }}
+                onClick={() => deleteQuery(q.id)}
               >
                 Delete
               </button>
@@ -107,6 +130,24 @@ export default function SavedQueriesPanel() {
           </pre>
         </div>
       )}
+
+      {/* Dialogs */}
+      <ConfirmDialog
+        isOpen={confirmOpen}
+        onClose={() => {
+          setConfirmOpen(false)
+          setConfirmAction(null)
+        }}
+        onConfirm={handleConfirm}
+        message="Delete this query?"
+        variant="danger"
+      />
+      
+      <ErrorDialog
+        isOpen={errorOpen}
+        onClose={() => setErrorOpen(false)}
+        message={errorMessage}
+      />
     </div>
   )
 }

@@ -5,6 +5,9 @@ import PanelRenderer from './PanelRenderer'
 import { exportDashboardToJson, importDashboardFromJson, filterDashboardsByRole } from '@/store/savedStore.dashboardIo'
 import { useAuthStore } from '@/store/authStore'
 import { showToast } from '@/components/Toast'
+import { PromptDialog } from '@/components/PromptDialog'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { ErrorDialog } from '@/components/ErrorDialog'
 
 export default function DashboardEditor() {
   const { dashboards, panels, queries, loadDashboards, loadPanels, loadQueries } = useSavedStore()
@@ -13,6 +16,14 @@ export default function DashboardEditor() {
   const [busy, setBusy] = React.useState(false)
   const [editingName, setEditingName] = React.useState<string | null>(null)
   const [editingNameValue, setEditingNameValue] = React.useState('')
+  
+  // Dialog states
+  const [promptOpen, setPromptOpen] = React.useState(false)
+  const [confirmOpen, setConfirmOpen] = React.useState(false)
+  const [confirmAction, setConfirmAction] = React.useState<(() => void) | null>(null)
+  const [confirmMessage, setConfirmMessage] = React.useState('')
+  const [errorOpen, setErrorOpen] = React.useState(false)
+  const [errorMessage, setErrorMessage] = React.useState('')
 
   // Filter dashboards by role
   const userRoles = user?.roles || []
@@ -47,7 +58,8 @@ export default function DashboardEditor() {
       })
       await loadPanels(current)
     } catch (e: any) {
-      alert(`Error: ${e.message}`)
+      setErrorMessage(`Error: ${e.message}`)
+      setErrorOpen(true)
     } finally {
       setBusy(false)
     }
@@ -59,7 +71,8 @@ export default function DashboardEditor() {
       await savedApi.updatePanel(current, panelId, { queryId })
       await loadPanels(current)
     } catch (e: any) {
-      alert(`Error: ${e.message}`)
+      setErrorMessage(`Error: ${e.message}`)
+      setErrorOpen(true)
     }
   }
 
@@ -70,7 +83,8 @@ export default function DashboardEditor() {
       await savedApi.updatePanel(current, panelId, { refreshSec: clamped })
       await loadPanels(current)
     } catch (e: any) {
-      alert(`Error: ${e.message}`)
+      setErrorMessage(`Error: ${e.message}`)
+      setErrorOpen(true)
     }
   }
 
@@ -80,7 +94,8 @@ export default function DashboardEditor() {
       await loadDashboards()
       setEditingName(null)
     } catch (e: any) {
-      alert(`Error: ${e.message}`)
+      setErrorMessage(`Error: ${e.message}`)
+      setErrorOpen(true)
     }
   }
 
@@ -107,24 +122,36 @@ export default function DashboardEditor() {
       setCurrent(newDash.id)
       showToast('Dashboard duplicated')
     } catch (e: any) {
-      alert(`Error: ${e.message}`)
+      setErrorMessage(`Error: ${e.message}`)
+      setErrorOpen(true)
     } finally {
       setBusy(false)
     }
   }
 
-  const deleteDashboard = async (id: string) => {
-    if (!confirm('Delete this dashboard? This cannot be undone.')) return
-    setBusy(true)
-    try {
-      await savedApi.deleteDashboard(id)
-      await loadDashboards()
-      if (current === id) setCurrent(null)
-      showToast('Dashboard deleted')
-    } catch (e: any) {
-      alert(`Error: ${e.message}`)
-    } finally {
-      setBusy(false)
+  const deleteDashboard = (id: string) => {
+    setConfirmMessage('Delete this dashboard? This cannot be undone.')
+    setConfirmAction(() => async () => {
+      setBusy(true)
+      try {
+        await savedApi.deleteDashboard(id)
+        await loadDashboards()
+        if (current === id) setCurrent(null)
+        showToast('Dashboard deleted')
+      } catch (e: any) {
+        setErrorMessage(`Error: ${e.message}`)
+        setErrorOpen(true)
+      } finally {
+        setBusy(false)
+      }
+    })
+    setConfirmOpen(true)
+  }
+
+  const handleConfirm = () => {
+    if (confirmAction) {
+      confirmAction()
+      setConfirmAction(null)
     }
   }
 
@@ -141,7 +168,8 @@ export default function DashboardEditor() {
       URL.revokeObjectURL(url)
       showToast('Dashboard exported')
     } catch (e: any) {
-      alert(`Export error: ${e.message}`)
+      setErrorMessage(`Export error: ${e.message}`)
+      setErrorOpen(true)
     }
   }
 
@@ -160,37 +188,47 @@ export default function DashboardEditor() {
         showToast('Dashboard imported successfully')
       }
     } catch (e: any) {
-      alert(`Import error: ${e.message}`)
+      setErrorMessage(`Import error: ${e.message}`)
+      setErrorOpen(true)
     } finally {
       setBusy(false)
     }
   }
 
-  const removePanel = async (id: string) => {
+  const removePanel = (id: string) => {
     if (!current) return
 
-    setBusy(true)
-    try {
-      await savedApi.deletePanel(current, id)
-      await loadPanels(current)
-    } catch (e: any) {
-      alert(`Error: ${e.message}`)
-    } finally {
-      setBusy(false)
-    }
+    setConfirmMessage('Remove this panel?')
+    setConfirmAction(() => async () => {
+      setBusy(true)
+      try {
+        await savedApi.deletePanel(current!, id)
+        await loadPanels(current!)
+      } catch (e: any) {
+        setErrorMessage(`Error: ${e.message}`)
+        setErrorOpen(true)
+      } finally {
+        setBusy(false)
+      }
+    })
+    setConfirmOpen(true)
   }
 
-  const handleNewDashboard = async () => {
-    const name = prompt('Name your dashboard') || 'Untitled'
-    if (!name) return
+  const handleNewDashboard = () => {
+    setPromptOpen(true)
+  }
+
+  const handlePromptConfirm = async (name: string) => {
+    if (!name.trim()) return
 
     setBusy(true)
     try {
-      const d = await savedApi.createDashboard({ name })
+      const d = await savedApi.createDashboard({ name: name.trim() || 'Untitled' })
       await loadDashboards()
       setCurrent(d.id)
     } catch (e: any) {
-      alert(`Error: ${e.message}`)
+      setErrorMessage(`Error: ${e.message}`)
+      setErrorOpen(true)
     } finally {
       setBusy(false)
     }
@@ -337,11 +375,7 @@ export default function DashboardEditor() {
                     <div className="flex gap-2">
                       <button
                         className="text-xs opacity-80 hover:opacity-100 text-white"
-                        onClick={() => {
-                          if (confirm('Remove this panel?')) {
-                            removePanel(p.id)
-                          }
-                        }}
+                        onClick={() => removePanel(p.id)}
                       >
                         Remove
                       </button>
@@ -385,10 +419,38 @@ export default function DashboardEditor() {
                   )}
                 </div>
               )
-            })}
+            }            )}
           </div>
         </>
       )}
+
+      {/* Dialogs */}
+      <PromptDialog
+        isOpen={promptOpen}
+        onClose={() => setPromptOpen(false)}
+        onConfirm={handlePromptConfirm}
+        title="New Dashboard"
+        message="Name your dashboard"
+        placeholder="Dashboard name"
+        confirmText="Create"
+      />
+      
+      <ConfirmDialog
+        isOpen={confirmOpen}
+        onClose={() => {
+          setConfirmOpen(false)
+          setConfirmAction(null)
+        }}
+        onConfirm={handleConfirm}
+        message={confirmMessage}
+        variant={confirmMessage.includes('Delete') ? 'danger' : 'default'}
+      />
+      
+      <ErrorDialog
+        isOpen={errorOpen}
+        onClose={() => setErrorOpen(false)}
+        message={errorMessage}
+      />
     </div>
   )
 }
