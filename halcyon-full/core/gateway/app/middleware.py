@@ -25,10 +25,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     "roles": settings.default_roles,
                 }
                 return await call_next(request)
-            return JSONResponse(
+            response = JSONResponse(
                 status_code=401,
                 content={"detail": "Missing or invalid Authorization header"}
             )
+            # Add CORS headers manually since we're returning early
+            response.headers["Access-Control-Allow-Origin"] = "http://localhost:5173"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            return response
 
         token = auth_header.split(" ", 1)[1]
         
@@ -46,10 +50,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     "roles": settings.default_roles,
                 }
                 return await call_next(request)
-            return JSONResponse(
+            response = JSONResponse(
                 status_code=401,
                 content={"detail": "Invalid or expired token"}
             )
+            # Add CORS headers manually since we're returning early
+            response.headers["Access-Control-Allow-Origin"] = "http://localhost:5173"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            return response
 
         # Extract user info
         roles = extract_roles(payload)
