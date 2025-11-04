@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react'
-import * as cytoscape from 'cytoscape'
+// @ts-ignore - cytoscape doesn't have proper default export types
+import cytoscape from 'cytoscape'
 import type { Core } from 'cytoscape'
 import { onFocus } from '@/store/bus'
 import { useSelectionStore } from '@/store/selectionStore'
@@ -41,8 +42,8 @@ export default function GraphCanvas({ elements }:{ elements:Elem }) {
         return
       }
       
-             try {
-         cyRef.current = (cytoscape as any).default({ 
+                    try {
+         const cy = cytoscape({ 
            container: ref.current,
            elements: [],
            style: [
@@ -51,15 +52,17 @@ export default function GraphCanvas({ elements }:{ elements:Elem }) {
              { selector: '.selected', style: { 'border-width': 4, 'border-color':'#fff' } }
            ]
          })
-        
-        cyRef.current.on('tap', 'node', (ev) => {
-          const id = ev.target.id(); const type = ev.target.data('type')
-          setSel({ id, type })
-          if (cyRef.current) {
-            cyRef.current.elements().removeClass('selected')
-            ev.target.addClass('selected')
-          }
-        })
+         
+         cyRef.current = cy
+         
+         cy.on('tap', 'node', (ev) => {
+           const id = ev.target.id(); const type = ev.target.data('type')
+           setSel({ id, type })
+           if (cyRef.current) {
+             cyRef.current.elements().removeClass('selected')
+             ev.target.addClass('selected')
+           }
+         })
       } catch (e) {
         console.error('Failed to initialize graph:', e)
         initAttempted.current = false
