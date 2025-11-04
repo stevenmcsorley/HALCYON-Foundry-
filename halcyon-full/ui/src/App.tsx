@@ -10,6 +10,7 @@ import SavedQueriesPanel from './modules/saved/SavedQueriesPanel'
 import DashboardEditor from './modules/dashboards/DashboardEditor'
 import { useAuthStore } from './store/authStore'
 import * as auth from './services/auth'
+import { Toast, subscribeToToast } from './components/Toast'
 
 // Default to DEV_MODE=true for local development (bypass Keycloak)
 const DEV_MODE = import.meta.env.VITE_DEV_MODE === undefined || import.meta.env.VITE_DEV_MODE === 'true' || import.meta.env.VITE_DEV_MODE === '1'
@@ -20,10 +21,19 @@ export default function App() {
   const { user, initialize } = useAuthStore()
   const isAuthenticated = user || DEV_MODE || auth.isAuthenticated()
   const [activeTab, setActiveTab] = useState<Tab>('console')
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   useEffect(() => {
     initialize()
   }, [initialize])
+
+  useEffect(() => {
+    const unsubscribe = subscribeToToast((message) => {
+      setToastMessage(message)
+      setTimeout(() => setToastMessage(null), 3000)
+    })
+    return unsubscribe
+  }, [])
 
   // Helper to check if user has a specific role
   const hasRole = (role: string): boolean => {
@@ -118,6 +128,9 @@ export default function App() {
         <AdminPanel />
       )}
       */}
+      {toastMessage && (
+        <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
+      )}
     </div>
   )
 }
