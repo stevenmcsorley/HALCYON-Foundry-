@@ -106,8 +106,10 @@ class GraphStore:
     async def get_entities(self, entity_type: str | None = None) -> list[dict]:
         async with self._driver.session() as session:
             if entity_type:
+                # Escape backticks in label (same as upsert_entities)
+                label = entity_type.replace('`', '``')
                 result = await session.run(
-                    f"MATCH (n:{'{'}entity_type{'}'}) RETURN n.id as id, labels(n)[0] as type, properties(n) as attrs"
+                    f"MATCH (n:`{label}`) RETURN n.id as id, labels(n)[0] as type, properties(n) as attrs"
                 )
             else:
                 result = await session.run("MATCH (n) RETURN n.id as id, labels(n)[0] as type, properties(n) as attrs")
