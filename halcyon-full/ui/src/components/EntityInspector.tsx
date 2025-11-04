@@ -24,7 +24,19 @@ export default function EntityInspector() {
       </div>
       <pre className="text-xs opacity-80 overflow-auto max-h-[70vh]">{JSON.stringify(data?.attrs ?? {}, null, 2)}</pre>
       <div className="mt-3 flex gap-2">
-        <button className="px-2 py-1 rounded bg-white/10" onClick={()=>focus({id, type: type!})}>
+        <button 
+          className="px-2 py-1 rounded bg-white/10" 
+          onClick={() => {
+            // Focus on both map and graph
+            focus({id, type: type!})
+            // If entity has lat/lon, ensure map focuses too by checking attrs
+            if (data?.attrs?.lat && data?.attrs?.lon) {
+              // The map focus handler will pick this up from locations array
+              // But trigger again to ensure it works
+              setTimeout(() => focus({id, type: type!}), 50)
+            }
+          }}
+        >
           Focus on Map/Graph
         </button>
       </div>
