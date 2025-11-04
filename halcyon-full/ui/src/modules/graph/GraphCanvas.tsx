@@ -53,7 +53,21 @@ export default function GraphCanvas({ elements }:{ elements:Elem }) {
   }, [setSel])
 
   useEffect(() => {
-    if (!cyRef.current) return
+    if (!cyRef.current || !ref.current) return
+    // Ensure container has dimensions before updating
+    if (ref.current.offsetWidth === 0 || ref.current.offsetHeight === 0) {
+      // Retry after a short delay if container isn't ready
+      setTimeout(() => {
+        if (cyRef.current && ref.current && ref.current.offsetWidth > 0 && ref.current.offsetHeight > 0) {
+          cyRef.current.elements().remove()
+          cyRef.current.add([...elements.nodes, ...elements.edges])
+          cyRef.current.resize()
+          cyRef.current.layout({ name:'breadthfirst', animate:true, animationDuration:300 }).run()
+        }
+      }, 100)
+      return
+    }
+    
     cyRef.current.elements().remove()
     cyRef.current.add([...elements.nodes, ...elements.edges])
     // Resize before running layout to ensure proper dimensions
@@ -65,8 +79,15 @@ export default function GraphCanvas({ elements }:{ elements:Elem }) {
   useEffect(() => {
     if (!cyRef.current || !ref.current) return
     const resizeObserver = new ResizeObserver(() => {
-      if (cyRef.current) {
-        cyRef.current.resize()
+      if (cyRef.current && ref.current) {
+        // Only resize if container has dimensions
+        if (ref.current.offsetWidth > 0 && ref.current.offsetHeight > 0) {
+          cyRef.current.resize()
+          // Re-run layout if elements exist
+          if (cyRef.current.elements().length > 0) {
+            cyRef.current.layout({ name:'breadthfirst', animate:false }).run()
+          }
+        }
       }
     })
     resizeObserver.observe(ref.current)
@@ -81,5 +102,5 @@ export default function GraphCanvas({ elements }:{ elements:Elem }) {
     }
   }), [])
 
-  return <div ref={ref} className="w-full h-full rounded-lg bg-black/20" style={{ minHeight: 0 }} />
+  return <div ref={ref} className="w-full h-full rounded-lg bg-black/20" style={{ minHeight: 0, position: 'relative' }} />
 }
