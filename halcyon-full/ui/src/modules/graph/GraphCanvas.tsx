@@ -65,44 +65,65 @@ export default function GraphCanvas({ elements }:{ elements:Elem }) {
 
   useEffect(() => {
     if (!cyRef.current || !ref.current) return
-    // Ensure container has dimensions before updating
+    
+    // Don't update if container has no dimensions - wait for it
     if (ref.current.offsetWidth === 0 || ref.current.offsetHeight === 0) {
-      // Retry after a short delay if container isn't ready
-      setTimeout(() => {
+      // Retry after a short delay
+      const timeoutId = setTimeout(() => {
         if (cyRef.current && ref.current && ref.current.offsetWidth > 0 && ref.current.offsetHeight > 0) {
-          cyRef.current.elements().remove()
-          cyRef.current.add([...elements.nodes, ...elements.edges])
-          cyRef.current.resize()
-          cyRef.current.layout({ name:'breadthfirst', animate:true, animationDuration:300 }).run()
+          try {
+            cyRef.current.elements().remove()
+            cyRef.current.add([...elements.nodes, ...elements.edges])
+            cyRef.current.resize()
+            cyRef.current.layout({ name:'breadthfirst', animate:false, animationDuration:0 }).run()
+          } catch (e) {
+            console.error('Graph update error:', e)
+          }
         }
-      }, 100)
-      return
+      }, 150)
+      return () => clearTimeout(timeoutId)
     }
     
-    cyRef.current.elements().remove()
-    cyRef.current.add([...elements.nodes, ...elements.edges])
-    // Resize before running layout to ensure proper dimensions
-    cyRef.current.resize()
-    cyRef.current.layout({ name:'breadthfirst', animate:true, animationDuration:300 }).run()
+    // Container has dimensions, update immediately
+    try {
+      cyRef.current.elements().remove()
+      cyRef.current.add([...elements.nodes, ...elements.edges])
+      cyRef.current.resize()
+      cyRef.current.layout({ name:'breadthfirst', animate:false, animationDuration:0 }).run()
+    } catch (e) {
+      console.error('Graph update error:', e)
+    }
   }, [elements])
   
   // Handle container resize
   useEffect(() => {
     if (!cyRef.current || !ref.current) return
+    
+    let resizeTimeout: NodeJS.Timeout
     const resizeObserver = new ResizeObserver(() => {
       if (cyRef.current && ref.current) {
-        // Only resize if container has dimensions
-        if (ref.current.offsetWidth > 0 && ref.current.offsetHeight > 0) {
-          cyRef.current.resize()
-          // Re-run layout if elements exist
-          if (cyRef.current.elements().length > 0) {
-            cyRef.current.layout({ name:'breadthfirst', animate:false }).run()
+        // Debounce resize operations
+        clearTimeout(resizeTimeout)
+        resizeTimeout = setTimeout(() => {
+          if (cyRef.current && ref.current && ref.current.offsetWidth > 0 && ref.current.offsetHeight > 0) {
+            try {
+              cyRef.current.resize()
+              // Only re-run layout if elements exist and graph is ready
+              if (cyRef.current.elements().length > 0) {
+                cyRef.current.layout({ name:'breadthfirst', animate:false }).run()
+              }
+            } catch (e) {
+              console.error('Graph resize error:', e)
+            }
           }
-        }
+        }, 100)
       }
     })
     resizeObserver.observe(ref.current)
-    return () => resizeObserver.disconnect()
+    return () => {
+      clearTimeout(resizeTimeout)
+      resizeObserver.disconnect()
+    }
   }, [])
 
   useEffect(() => onFocus(({ id }) => {
