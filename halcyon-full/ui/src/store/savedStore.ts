@@ -10,7 +10,7 @@ export type SavedQuery = {
   updatedAt?: string
 }
 
-export type PanelType = 'map' | 'graph' | 'list' | 'timeline' | 'metric'
+export type PanelType = 'map' | 'graph' | 'list' | 'timeline' | 'metric' | 'table' | 'topbar' | 'geoheat'
 
 export type DashboardPanel = {
   id: string
@@ -18,7 +18,7 @@ export type DashboardPanel = {
   title: string
   type: PanelType
   refreshSec?: number
-  queryId: string
+  queryId?: string
   config?: Record<string, unknown>
   position?: number
 }
@@ -27,6 +27,8 @@ export type Dashboard = {
   id: string
   name: string
   owner?: string
+  visibilityRoles?: string[]
+  config?: Record<string, unknown>
   createdAt?: string
   updatedAt?: string
 }

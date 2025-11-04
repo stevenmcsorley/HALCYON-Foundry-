@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://halcyon.dev/schema/dashboard-export-v1.json",
+  "title": "HALCYON Dashboard Export",
+  "type": "object",
+  "required": ["version", "dashboard", "panels"],
+  "properties": {
+    "version": { "const": 1 },
+    "exportedAt": { "type": "string", "format": "date-time" },
+    "meta": {
+      "type": "object",
+      "properties": {
+        "compat": { "type": "object", "additionalProperties": true },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "dashboard": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "minLength": 1 },
+        "visibilityRoles": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "config": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": false
+    },
+    "panels": {
+      "type": "array",
+      "minItems": 0,
+      "items": {
+        "type": "object",
+        "required": ["title", "type"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string", "minLength": 1 },
+          "type": {
+            "type": "string",
+            "enum": ["map", "graph", "list", "timeline", "metric", "table", "topbar", "geoheat"]
+          },
+          "queryRef": {
+            "type": "object",
+            "description": "Reference to a saved query by id or name.",
+            "oneOf": [
+              { "required": ["id"], "properties": { "id": { "type": "string", "minLength": 1 } } },
+              { "required": ["name"], "properties": { "name": { "type": "string", "minLength": 1 } } }
+            ],
+            "additionalProperties": false
+          },
+          "refreshSec": { "type": "integer", "minimum": 5, "maximum": 86400 },
+          "config": { "type": "object", "additionalProperties": true }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

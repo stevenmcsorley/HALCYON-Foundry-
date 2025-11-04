@@ -174,6 +174,17 @@ export function getUser(): User | null {
   return userStr ? JSON.parse(userStr) : null
 }
 
+export function hasRole(role: string): boolean {
+  const user = getUser()
+  if (!user) return false
+  return user.roles.includes(role)
+}
+
+export function hasRoleAny(userRoles: string[], requiredRoles: string[]): boolean {
+  if (requiredRoles.length === 0) return true
+  return requiredRoles.some(role => userRoles.includes(role))
+}
+
 export function isAuthenticated(): boolean {
   return !!getToken() || DEV_MODE
 }
