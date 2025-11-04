@@ -24,7 +24,7 @@ export const MapPanel: React.FC = () => {
       {loading && <div className="text-sm text-muted mb-2 flex-shrink-0 p-3">Loading...</div>}
       {error && <div className="text-sm text-red-400 mb-2 flex-shrink-0 p-3">Error: {error}</div>}
       {!loading && !error && (
-        <div className="flex-1 min-h-0 p-3">
+        <div className="flex-1 min-h-0 p-3 flex flex-col">
           <MapCanvas locations={locations} />
         </div>
       )}

@@ -70,5 +70,5 @@ export default function MapCanvas({ locations }:{ locations:Loc[] }) {
     return unsubscribe
   }, [locations])
 
-  return <div ref={wrap} className="flex-1 rounded-lg overflow-hidden min-h-0" />
+  return <div ref={wrap} className="w-full h-full rounded-lg overflow-hidden" style={{ minHeight: 0 }} />
 }
