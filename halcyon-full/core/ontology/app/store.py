@@ -140,14 +140,13 @@ class GraphStore:
             safe_sort = "".join(c for c in sort if c.isalnum() or c == "_")
             safe_order = "DESC" if order.lower() == "desc" else "ASC"
             
-            # Default to timestamp desc if sort field doesn't exist in entities
-            cypher += f" RETURN n.id as id, labels(n)[0] as type, properties(n) as attrs, n.{safe_sort} as sort_value"
-            
             # Use COALESCE to handle missing sort field (treat as old timestamp for timestamp sort)
             if safe_sort == "timestamp":
-                cypher += f" ORDER BY COALESCE(n.{safe_sort}, '1970-01-01T00:00:00Z') {safe_order}, n.id {safe_order}"
+                order_by = f"ORDER BY COALESCE(n.{safe_sort}, '1970-01-01T00:00:00Z') {safe_order}, n.id {safe_order}"
             else:
-                cypher += f" ORDER BY COALESCE(n.{safe_sort}, '') {safe_order}, n.id {safe_order}"
+                order_by = f"ORDER BY COALESCE(n.{safe_sort}, '') {safe_order}, n.id {safe_order}"
+            
+            cypher += f" RETURN n.id as id, labels(n)[0] as type, properties(n) as attrs\n{order_by}"
             
             if limit:
                 cypher += f" LIMIT {limit}"
