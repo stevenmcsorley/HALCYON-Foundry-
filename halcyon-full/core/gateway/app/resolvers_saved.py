@@ -26,7 +26,7 @@ async def resolve_saved_queries(obj, info):
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT id, name, owner, gql, created_at, updated_at FROM saved_queries WHERE owner = $1 ORDER BY updated_at DESC",
+            "SELECT id, name, owner, gql, shape_hint, created_at, updated_at FROM saved_queries WHERE owner = $1 ORDER BY updated_at DESC",
             owner
         )
         return [
@@ -35,6 +35,7 @@ async def resolve_saved_queries(obj, info):
                 "name": row["name"],
                 "owner": row["owner"],
                 "gql": row["gql"],
+                "shapeHint": row["shape_hint"],
                 "createdAt": row["created_at"].isoformat(),
                 "updatedAt": row["updated_at"].isoformat(),
             }
@@ -49,7 +50,7 @@ async def resolve_saved_query(obj, info, id: str):
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, name, owner, gql, created_at, updated_at FROM saved_queries WHERE id = $1 AND owner = $2",
+            "SELECT id, name, owner, gql, shape_hint, created_at, updated_at FROM saved_queries WHERE id = $1 AND owner = $2",
             UUID(id), owner
         )
         if not row:
@@ -59,6 +60,7 @@ async def resolve_saved_query(obj, info, id: str):
             "name": row["name"],
             "owner": row["owner"],
             "gql": row["gql"],
+            "shapeHint": row["shape_hint"],
             "createdAt": row["created_at"].isoformat(),
             "updatedAt": row["updated_at"].isoformat(),
         }
@@ -143,17 +145,18 @@ async def resolve_create_saved_query(obj, info, input):
         try:
             row = await conn.fetchrow(
                 """
-                INSERT INTO saved_queries (name, owner, gql)
-                VALUES ($1, $2, $3)
-                RETURNING id, name, owner, gql, created_at, updated_at
+                INSERT INTO saved_queries (name, owner, gql, shape_hint)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id, name, owner, gql, shape_hint, created_at, updated_at
                 """,
-                input["name"], owner, input["gql"]
+                input["name"], owner, input["gql"], input.get("shapeHint")
             )
             return {
                 "id": str(row["id"]),
                 "name": row["name"],
                 "owner": row["owner"],
                 "gql": row["gql"],
+                "shapeHint": row["shape_hint"],
                 "createdAt": row["created_at"].isoformat(),
                 "updatedAt": row["updated_at"].isoformat(),
             }
@@ -178,10 +181,14 @@ async def resolve_update_saved_query(obj, info, id: str, input):
             updates.append(f"gql = ${pos}")
             values.append(input["gql"])
             pos += 1
+        if input.get("shapeHint") is not None:
+            updates.append(f"shape_hint = ${pos}")
+            values.append(input["shapeHint"])
+            pos += 1
         
         if not updates:
             row = await conn.fetchrow(
-                "SELECT id, name, owner, gql, created_at, updated_at FROM saved_queries WHERE id = $1 AND owner = $2",
+                "SELECT id, name, owner, gql, shape_hint, created_at, updated_at FROM saved_queries WHERE id = $1 AND owner = $2",
                 UUID(id), owner
             )
             if not row:
@@ -191,6 +198,7 @@ async def resolve_update_saved_query(obj, info, id: str, input):
                 "name": row["name"],
                 "owner": row["owner"],
                 "gql": row["gql"],
+                "shapeHint": row["shape_hint"],
                 "createdAt": row["created_at"].isoformat(),
                 "updatedAt": row["updated_at"].isoformat(),
             }
@@ -203,7 +211,7 @@ async def resolve_update_saved_query(obj, info, id: str, input):
             UPDATE saved_queries
             SET {', '.join(updates)}
             WHERE id = ${pos} AND owner = ${pos + 1}
-            RETURNING id, name, owner, gql, created_at, updated_at
+            RETURNING id, name, owner, gql, shape_hint, created_at, updated_at
             """,
             *values
         )
@@ -214,6 +222,7 @@ async def resolve_update_saved_query(obj, info, id: str, input):
             "name": row["name"],
             "owner": row["owner"],
             "gql": row["gql"],
+            "shapeHint": row["shape_hint"],
             "createdAt": row["created_at"].isoformat(),
             "updatedAt": row["updated_at"].isoformat(),
         }

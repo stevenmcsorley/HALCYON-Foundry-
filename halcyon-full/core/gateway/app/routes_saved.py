@@ -31,7 +31,7 @@ async def list_saved_queries(request: Request):
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT id, name, owner, gql, created_at, updated_at FROM saved_queries WHERE owner = $1 ORDER BY updated_at DESC",
+            "SELECT id, name, owner, gql, shape_hint, created_at, updated_at FROM saved_queries WHERE owner = $1 ORDER BY updated_at DESC",
             owner
         )
         return [SavedQuery(**dict(row)) for row in rows]
@@ -46,11 +46,11 @@ async def create_saved_query(query: SavedQueryCreate, request: Request):
         try:
             row = await conn.fetchrow(
                 """
-                INSERT INTO saved_queries (name, owner, gql)
-                VALUES ($1, $2, $3)
-                RETURNING id, name, owner, gql, created_at, updated_at
+                INSERT INTO saved_queries (name, owner, gql, shape_hint)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id, name, owner, gql, shape_hint, created_at, updated_at
                 """,
-                query.name, owner, query.gql
+                query.name, owner, query.gql, query.shape_hint
             )
             return SavedQuery(**dict(row))
         except asyncpg.UniqueViolationError:
@@ -64,7 +64,7 @@ async def get_saved_query(query_id: UUID, request: Request):
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, name, owner, gql, created_at, updated_at FROM saved_queries WHERE id = $1 AND owner = $2",
+            "SELECT id, name, owner, gql, shape_hint, created_at, updated_at FROM saved_queries WHERE id = $1 AND owner = $2",
             query_id, owner
         )
         if not row:
@@ -89,11 +89,15 @@ async def update_saved_query(query_id: UUID, query: SavedQueryUpdate, request: R
             updates.append(f"gql = ${pos}")
             values.append(query.gql)
             pos += 1
+        if query.shape_hint is not None:
+            updates.append(f"shape_hint = ${pos}")
+            values.append(query.shape_hint)
+            pos += 1
         
         if not updates:
             # Just fetch and return existing
             row = await conn.fetchrow(
-                "SELECT id, name, owner, gql, created_at, updated_at FROM saved_queries WHERE id = $1 AND owner = $2",
+                "SELECT id, name, owner, gql, shape_hint, created_at, updated_at FROM saved_queries WHERE id = $1 AND owner = $2",
                 query_id, owner
             )
             if not row:
@@ -108,7 +112,7 @@ async def update_saved_query(query_id: UUID, query: SavedQueryUpdate, request: R
             UPDATE saved_queries
             SET {', '.join(updates)}
             WHERE id = ${pos} AND owner = ${pos + 1}
-            RETURNING id, name, owner, gql, created_at, updated_at
+            RETURNING id, name, owner, gql, shape_hint, created_at, updated_at
             """,
             *values
         )

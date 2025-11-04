@@ -15,10 +15,12 @@ async def init_db() -> None:
     """Initialize database tables (run migrations)."""
     pool = await get_pool()
     async with pool.acquire() as conn:
-        # Read migration SQL file
+        # Run all migrations in order
         import os
-        migration_path = os.path.join(os.path.dirname(__file__), "migrations", "004_saved_dashboards.sql")
-        if os.path.exists(migration_path):
+        import glob
+        migrations_dir = os.path.join(os.path.dirname(__file__), "migrations")
+        migration_files = sorted(glob.glob(os.path.join(migrations_dir, "*.sql")))
+        for migration_path in migration_files:
             with open(migration_path, "r") as f:
                 migration_sql = f.read()
             await conn.execute(migration_sql)

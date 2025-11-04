@@ -57,6 +57,7 @@ type SavedQuery {
   name: String!
   owner: String!
   gql: String!
+  shapeHint: String
   createdAt: String!
   updatedAt: String!
 }
@@ -64,11 +65,13 @@ type SavedQuery {
 input SavedQueryInput {
   name: String!
   gql: String!
+  shapeHint: String
 }
 
 input SavedQueryUpdateInput {
   name: String
   gql: String
+  shapeHint: String
 }
 
 type Dashboard {

@@ -275,3 +275,69 @@ metric      → Metric
 geo[]       → Map, GeoHeat
 items[]     → TopBar
 ```
+
+## Common Fixes
+
+### Convert counts → Metric
+
+If you have a counts query but need a metric:
+
+**Query**:
+```graphql
+query {
+  eventCounts(range: "1h") {
+    total
+  }
+}
+```
+
+**Metric Panel Config**: `{ "path": "data.eventCounts.total" }`
+
+Or use a direct count query:
+```graphql
+query {
+  entitiesByType(type: "Event", limit: 1) {
+    id
+  }
+}
+```
+Returns `entities[]`, Metric panel counts array length automatically.
+
+### Convert entities → TopBar
+
+If you have entities but want categorical bars:
+
+**Query**:
+```graphql
+query {
+  entities(type: "Event", limit: 500) {
+    type
+  }
+}
+```
+
+**TopBar Panel Config**:
+```json
+{
+  "sourcePath": "data.entities",
+  "labelKey": "type",
+  "valueMode": "count"
+}
+```
+
+This rolls up entities by `type` field and counts occurrences.
+
+## Panel Quick Picks
+
+Recommended saved queries by panel type:
+
+| Panel | Query Example | Config |
+|-------|--------------|--------|
+| **Map** | `query { entitiesByType(type: "Event", limit: 200) { id type attrs } }` | (none) - requires `attrs.lat`/`attrs.lon` |
+| **List** | `query { entitiesByType(type: "Event", limit: 20) { id type attrs } }` | (none) |
+| **Table** | `query { entitiesByType(type: "Event", limit: 100) { id type attrs } }` | (none) - auto-infers columns |
+| **Graph** | `query { entities(limit: 100) { id type } relationships(limit: 200) { fromId toId type } }` | (none) |
+| **Timeline** | `query { eventCounts(bucket: "1h", limit: 24) { bucket count } }` | (none) |
+| **Metric** | `query { entitiesByType(type: "Event", limit: 1) { id } }` | (none) - counts array |
+| **TopBar** | `query { entities(type: "Event", limit: 500) { type } }` | `{ "sourcePath": "data.entities", "labelKey": "type", "valueMode": "count" }` |
+| **GeoHeat** | `query { entitiesByType(type: "Event", limit: 500) { id attrs { lat lon severity } } }` | `{ "latKey": "attrs.lat", "lonKey": "attrs.lon", "intensityKey": "attrs.severity" }` |

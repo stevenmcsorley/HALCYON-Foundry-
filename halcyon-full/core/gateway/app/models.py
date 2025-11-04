@@ -9,6 +9,7 @@ class SavedQuery(BaseModel):
     name: str
     owner: str
     gql: str
+    shape_hint: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -16,11 +17,13 @@ class SavedQuery(BaseModel):
 class SavedQueryCreate(BaseModel):
     name: str
     gql: str
+    shape_hint: Optional[str] = None
 
 
 class SavedQueryUpdate(BaseModel):
     name: Optional[str] = None
     gql: Optional[str] = None
+    shape_hint: Optional[str] = None
 
 
 class Dashboard(BaseModel):
