@@ -45,7 +45,7 @@ services:
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-halcyon-dev}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-halcyon-gateway}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-RS256}
-      DEV_MODE: ${DEV_MODE:-true}
+      DEV_MODE: ${DEV_MODE:-false}
     depends_on: [ ontology, opa, redis ]
     ports: [ "8088:8088" ]
 
@@ -80,7 +80,7 @@ services:
     build: ../ui
     environment:
       VITE_GATEWAY_URL: ${VITE_GATEWAY_URL:-http://localhost:8088/graphql}
-      VITE_DEV_MODE: ${VITE_DEV_MODE:-true}
+      VITE_DEV_MODE: ${VITE_DEV_MODE:-false}
       VITE_KEYCLOAK_URL: ${VITE_KEYCLOAK_URL:-http://localhost:8089}
       VITE_KEYCLOAK_REALM: ${VITE_KEYCLOAK_REALM:-halcyon-dev}
       VITE_KEYCLOAK_CLIENT_ID: ${VITE_KEYCLOAK_CLIENT_ID:-halcyon-ui}
