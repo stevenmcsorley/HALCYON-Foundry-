@@ -1,9 +1,9 @@
 import React from 'react'
 import type { PanelType, SavedQuery } from '@/store/savedStore'
-import MapPanel from '@/modules/map/MapPanel'
-import GraphPanel from '@/modules/graph/GraphPanel'
-import ListPanel from '@/modules/list'
-import TimelinePanel from '@/modules/timeline'
+import { MapPanel } from '@/modules/map'
+import { GraphPanel } from '@/modules/graph'
+import { ListPanel } from '@/modules/list'
+import { TimelinePanel } from '@/modules/timeline'
 import { gql } from '@/services/api'
 
 export default function PanelRenderer({ type, query }: { type: PanelType; query: SavedQuery }) {
