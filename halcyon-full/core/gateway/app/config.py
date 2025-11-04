@@ -8,9 +8,21 @@ class Settings(BaseSettings):
     policy_base_url: str
     service_name: str = "halcyon-gateway"
     default_roles: List[str] = ["analyst"]
+    keycloak_url: str = "http://localhost:8089"
+    keycloak_realm: str = "halcyon-dev"
+    keycloak_client_id: str = "halcyon-gateway"
+    oidc_discovery_url: str = ""
+    jwt_algorithm: str = "RS256"
+    dev_mode: bool = True
 
     class Config:
         env_prefix = ""
         case_sensitive = False
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Auto-generate discovery URL if not provided
+        if not self.oidc_discovery_url:
+            self.oidc_discovery_url = f"{self.keycloak_url}/realms/{self.keycloak_realm}/.well-known/openid-configuration"
 
 settings = Settings()

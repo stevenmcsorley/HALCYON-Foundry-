@@ -32,11 +32,10 @@ async def resolve_relationships(obj, info):
 async def resolve_upsert_entities(obj, info, input):
   context = info.context
   policy, ont = context["policy"], context["ontology"]
-  request = context["request"]
   
-  # Extract roles from header or use defaults
-  roles_header = request.headers.get("x-roles", None) if hasattr(request, "headers") else None
-  roles = [r.strip() for r in roles_header.split(",")] if roles_header else settings.default_roles
+  # Extract roles from context user or use defaults
+  user = context.get("user", {})
+  roles = user.get("roles", settings.default_roles)
   
   if not await policy.allowed({"action":"write_entities","count":len(input),"roles":roles}): return False
   await ont.upsert_entities(input)
@@ -51,11 +50,10 @@ async def resolve_upsert_entities(obj, info, input):
 async def resolve_upsert_relationships(obj, info, input):
   context = info.context
   policy, ont = context["policy"], context["ontology"]
-  request = context["request"]
   
-  # Extract roles from header or use defaults
-  roles_header = request.headers.get("x-roles", None) if hasattr(request, "headers") else None
-  roles = [r.strip() for r in roles_header.split(",")] if roles_header else settings.default_roles
+  # Extract roles from context user or use defaults
+  user = context.get("user", {})
+  roles = user.get("roles", settings.default_roles)
   
   if not await policy.allowed({"action":"write_relationships","count":len(input),"roles":roles}): return False
   # Convert GraphQL camelCase to snake_case for ontology service

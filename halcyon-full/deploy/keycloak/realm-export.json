@@ -1,0 +1,70 @@
+{
+  "realm": "halcyon-dev",
+  "enabled": true,
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "Administrator role"
+      },
+      {
+        "name": "analyst",
+        "description": "Analyst role"
+      },
+      {
+        "name": "viewer",
+        "description": "Viewer role"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "halcyon-ui",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "http://localhost:5173/*",
+        "http://127.0.0.1:5173/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173"
+      ]
+    },
+    {
+      "clientId": "halcyon-gateway",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "secret": "halcyon-gateway-secret",
+      "redirectUris": [
+        "*"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin"
+        }
+      ],
+      "realmRoles": ["admin"]
+    },
+    {
+      "username": "analyst",
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "analyst"
+        }
+      ],
+      "realmRoles": ["analyst"]
+    }
+  ]
+}

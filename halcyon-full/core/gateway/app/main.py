@@ -9,6 +9,7 @@ from .ws_pubsub import register_ws
 from .health import router as health_router
 from .logging import setup_logging
 from .tracing import setup_tracing
+from .middleware import AuthMiddleware
 
 setup_logging()
 
@@ -18,6 +19,9 @@ schema = make_executable_schema(type_defs, query, mutation)
 app = FastAPI(title="HALCYON Gateway", version="0.1.0")
 
 setup_tracing(app)
+
+# Add auth middleware
+app.add_middleware(AuthMiddleware)
 
 # Add CORS middleware
 app.add_middleware(
@@ -30,7 +34,31 @@ app.add_middleware(
 
 ontology_client = OntologyClient()
 policy_client = PolicyClient()
-graphql_app = GraphQL(schema, context_value=lambda req: {"request": req, "ontology": ontology_client, "policy": policy_client})
+
+def get_context(req):
+    """Create GraphQL context with user info from request state."""
+    context = {
+        "request": req,
+        "ontology": ontology_client,
+        "policy": policy_client,
+    }
+    # Add user info from middleware if available
+    # Ariadne passes ASGI scope, state is in scope["state"]
+    state = req.scope.get("state", {})
+    if hasattr(state, "user"):
+        context["user"] = state.user
+    elif "user" in state:
+        context["user"] = state["user"]
+    else:
+        # Fallback for dev mode
+        context["user"] = {
+            "sub": "dev-user",
+            "email": "dev@halcyon.local",
+            "roles": settings.default_roles,
+        }
+    return context
+
+graphql_app = GraphQL(schema, context_value=get_context)
 
 register_ws(app)
 app.include_router(health_router)

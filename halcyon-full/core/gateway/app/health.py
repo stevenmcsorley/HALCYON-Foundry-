@@ -1,5 +1,5 @@
 import httpx
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Response, Request, HTTPException
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from .config import settings
 
@@ -72,3 +72,19 @@ async def health_ready():
 async def metrics():
     """Prometheus metrics endpoint."""
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+@router.get("/auth/user")
+async def get_current_user(request: Request):
+    """Get current authenticated user information."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        from .config import settings
+        if settings.dev_mode:
+            return {
+                "sub": "dev-user",
+                "email": "dev@halcyon.local",
+                "roles": settings.default_roles,
+            }
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
