@@ -39,7 +39,10 @@ export default function App() {
   return (
     <div className="min-h-screen bg-surface text-white">
       <header className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">HALCYON Console</h1>
+        <div className="flex items-center gap-3">
+          <img src="/logo.png" alt="HALCYON Logo" className="h-8 w-8 object-contain" />
+          <h1 className="text-xl font-semibold">HALCYON Console</h1>
+        </div>
         <UserMenu />
       </header>
 
