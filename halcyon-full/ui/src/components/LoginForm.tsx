@@ -20,7 +20,10 @@ export default function LoginForm() {
   return (
     <div className="min-h-screen bg-surface flex items-center justify-center">
       <div className="bg-panel rounded-xl p-8 w-96 border border-white/10">
-        <h2 className="text-2xl font-semibold mb-6">HALCYON Console</h2>
+        <div className="flex flex-col items-center mb-6">
+          <img src="/logo.png" alt="HALCYON Logo" className="h-16 w-16 object-contain mb-4" />
+          <h2 className="text-2xl font-semibold">HALCYON Console</h2>
+        </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm mb-1 opacity-80">Username</label>
