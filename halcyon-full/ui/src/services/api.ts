@@ -12,52 +12,110 @@ export async function gql<T>(query: string, variables?: Record<string, any>): Pr
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
+  
+  const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8088/graphql'
 
   let res = await fetch(import.meta.env.VITE_GATEWAY_URL ?? 'http://localhost:8088/graphql', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ query, variables })
+    body: JSON.stringify({ query, variables }),
   })
 
-  // If 401 and we have a token, try refreshing (only once)
-  if (res.status === 401 && token && !isRedirecting) {
-    try {
-      await auth.refresh()
-      // Retry with new token
-      const newToken = auth.getToken()
-      if (newToken) {
-        headers['Authorization'] = `Bearer ${newToken}`
-        res = await fetch(import.meta.env.VITE_GATEWAY_URL ?? 'http://localhost:8088/graphql', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ query, variables })
-        })
-        // If retry succeeds, return the data
-        if (res.ok) {
-          const data: GraphQLResponse<T> = await res.json()
-          if (data.errors?.length) throw new Error(data.errors.map(e => e.message).join('; '))
-          return data.data as T
-        }
-      }
-    } catch (refreshError) {
-      // Refresh failed - logout and redirect (only once)
-      if (!isRedirecting) {
-        isRedirecting = true
-        auth.logout() // This will redirect
-      }
-      throw new Error('Unauthorized - please login again')
-    }
-  }
-
-  // If still 401 after refresh attempt (or no token), logout and redirect
   if (res.status === 401 && !isRedirecting) {
     isRedirecting = true
-    auth.logout() // This will redirect
+    if (import.meta.env.VITE_DEV_MODE !== 'true' && import.meta.env.VITE_DEV_MODE !== '1') {
+      window.location.href = '/login'
+    }
     throw new Error('Unauthorized')
   }
 
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const data: GraphQLResponse<T> = await res.json()
-  if (data.errors?.length) throw new Error(data.errors.map(e => e.message).join('; '))
-  return data.data as T
+  const json: GraphQLResponse<T> = await res.json()
+
+  if (json.errors) {
+    throw new Error(json.errors[0].message)
+  }
+
+  if (!json.data) {
+    throw new Error('No data returned')
+  }
+
+  return json.data
+}
+
+// REST API client for non-GraphQL endpoints (e.g., alerts)
+// Extract base URL from VITE_GATEWAY_URL (which may include /graphql) or default to port 8088
+const gatewayUrl = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8088/graphql'
+const baseUrl = gatewayUrl.includes('/graphql') 
+  ? gatewayUrl.replace('/graphql', '') 
+  : gatewayUrl.replace(/\/$/, '') || 'http://localhost:8088'
+
+export const api = {
+  async get<T = any>(path: string, config?: { params?: Record<string, any> }): Promise<{ data: T }> {
+    const token = auth.getToken()
+    const headers: Record<string, string> = {}
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
+    let url = `${baseUrl}${path}`
+    if (config?.params) {
+      const searchParams = new URLSearchParams()
+      Object.entries(config.params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          searchParams.append(key, String(value))
+        }
+      })
+      if (searchParams.toString()) {
+        url += `?${searchParams.toString()}`
+      }
+    }
+
+    const res = await fetch(url, { headers })
+    
+    if (res.status === 401 && !isRedirecting) {
+      isRedirecting = true
+      if (import.meta.env.VITE_DEV_MODE !== 'true' && import.meta.env.VITE_DEV_MODE !== '1') {
+        window.location.href = '/login'
+      }
+      throw new Error('Unauthorized')
+    }
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+    }
+
+    const data = await res.json()
+    return { data }
+  },
+
+  async post<T = any>(path: string, body?: any): Promise<{ data: T }> {
+    const token = auth.getToken()
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
+    const res = await fetch(`${baseUrl}${path}`, {
+      method: 'POST',
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    })
+    
+    if (res.status === 401 && !isRedirecting) {
+      isRedirecting = true
+      if (import.meta.env.VITE_DEV_MODE !== 'true' && import.meta.env.VITE_DEV_MODE !== '1') {
+        window.location.href = '/login'
+      }
+      throw new Error('Unauthorized')
+    }
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+    }
+
+    const data = await res.json()
+    return { data }
+  },
 }
