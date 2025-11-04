@@ -6,8 +6,10 @@ import uuid
 from .config import settings
 from .clients import OntologyClient, PolicyClient
 from .resolvers import query, mutation
+from .resolvers_fed import fed_query
 from .ws_pubsub import register_ws
 from .health import router as health_router
+from .routes_federation import router as federation_router
 from .logging import setup_logging
 from .tracing import setup_tracing
 from .middleware import AuthMiddleware
@@ -15,7 +17,7 @@ from .middleware import AuthMiddleware
 setup_logging()
 
 type_defs = load_schema_from_path("app/schema.graphql")
-schema = make_executable_schema(type_defs, query, mutation)
+schema = make_executable_schema(type_defs, [query, fed_query], mutation)
 
 app = FastAPI(title="HALCYON Gateway", version="0.1.0")
 
@@ -79,6 +81,7 @@ graphql_app = GraphQL(schema, context_value=get_context)
 
 register_ws(app)
 app.include_router(health_router)
+app.include_router(federation_router)
 
 @app.on_event("shutdown")
 async def shutdown():

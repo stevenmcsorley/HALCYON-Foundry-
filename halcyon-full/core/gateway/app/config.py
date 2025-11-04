@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     app_port: int = 8088
     ontology_base_url: str
     policy_base_url: str
+    registry_base_url: str = "http://registry:8090"
     service_name: str = "halcyon-gateway"
     default_roles: List[str] = ["analyst"]
     keycloak_url: str = "http://localhost:8089"

@@ -176,5 +176,38 @@ async def shutdown_connectors():
             logger.error(f"Error stopping connector {connector.connector_id}: {e}")
 
 
+# Registry routes for federation
+from fastapi import APIRouter
+from .cache import get_raw_documents, get_all_sources
+sources_router = APIRouter(prefix="/sources")
+
+
+@sources_router.get("/{source_id}/cache")
+async def get_source_cache(source_id: str, limit: int = 200):
+    """Get cached raw documents for a source connector."""
+    docs = get_raw_documents(source_id, limit=limit)
+    return docs
+
+
+@sources_router.get("/{source_id}/config")
+async def get_source_config(source_id: str):
+    """Get mapping configuration for a source connector."""
+    # Find connector and return its config mapping
+    if source_id in connectors:
+        connector = connectors[source_id]
+        return {
+            "id": connector.connector_id,
+            "mapping": connector.config.get("mapping", {}),
+        }
+    return {"error": "Source not found"}
+
+
+@sources_router.get("")
+async def list_sources():
+    """List all available sources."""
+    return {"sources": get_all_sources()}
+
+
 app.include_router(health_router)
 app.include_router(webhook_router)
+app.include_router(sources_router)

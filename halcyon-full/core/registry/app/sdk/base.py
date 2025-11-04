@@ -70,6 +70,13 @@ class BaseConnector(ABC):
 
             logger.info(f"[{self.connector_id}] Emitted entity: {mapped['id']} ({mapped['type']})")
             
+            # Store raw document in cache for federation queries
+            try:
+                from ..cache import store_raw_document
+                store_raw_document(self.connector_id, raw)
+            except Exception as e:
+                logger.debug(f"[{self.connector_id}] Failed to cache raw document: {e}")
+            
             # Send to Gateway via GraphQL mutation
             if gateway_url:
                 try:

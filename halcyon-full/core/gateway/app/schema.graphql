@@ -3,6 +3,7 @@ type Query {
   entities(type: String): [Entity!]!
   entityById(id: ID!): Entity
   relationships: [Relationship!]!
+  federatedEntities(source: String!, type: String, limit: Int = 200): [Entity!]!
 }
 
 type Mutation {
