@@ -24,7 +24,7 @@ export default function MapCanvas({ locations }:{ locations:Loc[] }) {
     
     // Wait a bit for container to have dimensions
     const initMap = () => {
-      if (!wrap.current) return
+      if (!wrap.current || map.current) return
       map.current = new maplibregl.Map({ 
         container: wrap.current, 
         style: styleUrl, 
@@ -37,6 +37,18 @@ export default function MapCanvas({ locations }:{ locations:Loc[] }) {
     // Try immediate init, fallback to timeout
     setTimeout(initMap, 50)
   }, [styleUrl])
+  
+  // Handle container resize
+  useEffect(() => {
+    if (!map.current || !wrap.current) return
+    const resizeObserver = new ResizeObserver(() => {
+      if (map.current) {
+        map.current.resize()
+      }
+    })
+    resizeObserver.observe(wrap.current)
+    return () => resizeObserver.disconnect()
+  }, [])
 
   const renderMarkers = useCallback(() => {
     if (!map.current) return

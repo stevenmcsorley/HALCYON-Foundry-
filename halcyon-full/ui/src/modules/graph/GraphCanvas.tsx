@@ -22,8 +22,16 @@ export default function GraphCanvas({ elements }:{ elements:Elem }) {
     // Wait a bit for container to have dimensions
     const initGraph = () => {
       if (!ref.current || cyRef.current) return
+      
+      // Check if container has dimensions
+      if (ref.current.offsetWidth === 0 || ref.current.offsetHeight === 0) {
+        setTimeout(initGraph, 50)
+        return
+      }
+      
       cyRef.current = cytoscape({ 
-        container: ref.current, 
+        container: ref.current,
+        elements: [],
         style: [
           { selector: 'node', style: { 'background-color':'#22d3ee', 'label':'data(label)', 'color':'#cbd5e1', 'font-size':12 } },
           { selector: 'edge', style: { 'line-color':'#64748b', 'target-arrow-color':'#64748b', 'target-arrow-shape':'triangle', 'curve-style':'bezier', 'label':'data(label)', 'font-size':10, 'text-rotation':'autorotate' } },
@@ -33,7 +41,10 @@ export default function GraphCanvas({ elements }:{ elements:Elem }) {
       cyRef.current.on('tap', 'node', (ev) => {
         const id = ev.target.id(); const type = ev.target.data('type')
         setSel({ id, type })
-        cyRef.current!.elements().removeClass('selected'); ev.target.addClass('selected')
+        if (cyRef.current) {
+          cyRef.current.elements().removeClass('selected')
+          ev.target.addClass('selected')
+        }
       })
     }
     
