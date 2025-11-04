@@ -56,21 +56,130 @@ class GraphStore:
 
     async def upsert_entities(self, entities: Iterable[EntityInstance]) -> None:
         async with self._driver.session() as session:
-            async with session.begin_transaction() as tx:
+            tx = await session.begin_transaction()
+            try:
                 for e in entities:
+                    # Use backticks for label with special characters, escape if needed
+                    label = e.type.replace('`', '``')  # Escape backticks in label
                     await tx.run(
-                        f"MERGE (n:{'{'}e.type{'}'} {{id:$id}}) SET n += $attrs",
+                        f"MERGE (n:`{label}` {{id:$id}}) SET n += $attrs",
                         id=e.id, attrs=e.attrs
                     )
+                await tx.commit()
+            except Exception:
+                await tx.rollback()
+                raise
+            finally:
+                await tx.close()
 
     async def upsert_relationships(self, rels: Iterable[RelationshipInstance]) -> None:
         async with self._driver.session() as session:
-            async with session.begin_transaction() as tx:
+            tx = await session.begin_transaction()
+            try:
                 for r in rels:
+                    rel_type = r.type.replace('`', '``')  # Escape backticks in relationship type
                     await tx.run(
                         f"""
                         MATCH (a {{id:$from_id}}), (b {{id:$to_id}})
-                        MERGE (a)-[x:{'{'}r.type{'}'}]->(b)
+                        MERGE (a)-[x:`{rel_type}`]->(b)
                         SET x += $attrs
                         """, from_id=r.from_id, to_id=r.to_id, attrs=r.attrs
                     )
+                await tx.commit()
+            except Exception:
+                await tx.rollback()
+                raise
+            finally:
+                await tx.close()
+
+    async def get_entities(self, entity_type: str | None = None) -> list[dict]:
+        async with self._driver.session() as session:
+            if entity_type:
+                result = await session.run(
+                    f"MATCH (n:{'{'}entity_type{'}'}) RETURN n.id as id, labels(n)[0] as type, properties(n) as attrs"
+                )
+            else:
+                result = await session.run("MATCH (n) RETURN n.id as id, labels(n)[0] as type, properties(n) as attrs")
+            entities = []
+            async for record in result:
+                attrs = dict(record["attrs"])
+                attrs.pop("id", None)  # Remove id from attrs since we have it separately
+                entities.append({
+                    "id": record["id"],
+                    "type": record["type"],
+                    "attrs": attrs
+                })
+            return entities
+
+    async def get_entity(self, entity_id: str) -> dict | None:
+        async with self._driver.session() as session:
+            # Use WHERE clause instead of property match for better compatibility
+            result = await session.run("""
+                MATCH (n)
+                WHERE n.id = $id
+                RETURN n.id as id, labels(n)[0] as type, properties(n) as attrs
+            """, id=entity_id)
+            record = await result.single()
+            if not record:
+                return None
+            attrs = dict(record["attrs"])
+            attrs.pop("id", None)
+            
+            # Get neighbors (connected entities) - lightweight IDs+types only
+            neighbors_result = await session.run("""
+                MATCH (n)-[r]-(other)
+                WHERE n.id = $id
+                RETURN DISTINCT other.id as id, labels(other)[0] as type, 
+                       type(r) as relType, 
+                       startNode(r).id = $id as isOutgoing
+            """, id=entity_id)
+            neighbors = []
+            async for neighbor_record in neighbors_result:
+                neighbors.append({
+                    "id": neighbor_record["id"],
+                    "type": neighbor_record["type"],
+                    "relType": neighbor_record["relType"],
+                    "isOutgoing": neighbor_record["isOutgoing"]
+                })
+            
+            # Response shape: { id, type, attrs } with optional neighbors
+            return {
+                "id": record["id"],
+                "type": record["type"],
+                "attrs": attrs,
+                "neighbors": neighbors
+            }
+
+    async def get_relationships(self, rel_type: str | None = None, from_id: str | None = None, to_id: str | None = None) -> list[dict]:
+        async with self._driver.session() as session:
+            query = "MATCH (a)-[r]->(b)"
+            conditions = []
+            params = {}
+            
+            if rel_type:
+                rel_type_escaped = rel_type.replace('`', '``')
+                query = f"MATCH (a)-[r:`{rel_type_escaped}`]->(b)"
+            
+            if from_id:
+                conditions.append("a.id = $from_id")
+                params["from_id"] = from_id
+            
+            if to_id:
+                conditions.append("b.id = $to_id")
+                params["to_id"] = to_id
+            
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+            
+            query += " RETURN type(r) as type, a.id as fromId, b.id as toId, properties(r) as attrs"
+            
+            result = await session.run(query, **params)
+            relationships = []
+            async for record in result:
+                relationships.append({
+                    "type": record["type"],
+                    "fromId": record["fromId"],
+                    "toId": record["toId"],
+                    "attrs": dict(record["attrs"]) if record["attrs"] else {}
+                })
+            return relationships

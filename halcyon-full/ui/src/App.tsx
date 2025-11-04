@@ -3,6 +3,7 @@ import { MapPanel } from './modules/map'
 import { GraphPanel } from './modules/graph'
 import { ListPanel } from './modules/list'
 import { TimelinePanel } from './modules/timeline'
+import { EntityInspector } from './components/EntityInspector'
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
         <section className="col-span-6 bg-panel rounded-xl p-3"><GraphPanel /></section>
         <section className="col-span-6 bg-panel rounded-xl p-3"><TimelinePanel /></section>
       </main>
+      <EntityInspector />
     </div>
   )
 }

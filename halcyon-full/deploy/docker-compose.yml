@@ -60,7 +60,7 @@ services:
   # OPA serving policies from local bundle
   opa:
     image: openpolicyagent/opa:latest
-    command: ["run", "--server", "--addr", ":8181", "--set", "bundles.halcyon.service=local", "--set", "services.local.url=file:///bundles"]
+    command: ["run", "--server", "--addr", ":8181", "--bundle", "/bundles"]
     volumes:
       - ../core/policy/bundle:/bundles:ro
     ports: [ "8181:8181" ]

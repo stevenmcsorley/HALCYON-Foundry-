@@ -1,16 +1,35 @@
 type Query {
   health: String!
-}
-
-type Mutation {
-  upsertEntities(input: [EntityInput!]!): Boolean!
-  upsertRelationships(input: [RelationshipInput!]!): Boolean!
+  entities(type: String): [Entity!]!
+  entityById(id: ID!): Entity
+  entitiesByType(type: String!): [Entity!]!
+  relationships(type: String, fromId: ID, toId: ID): [Relationship!]!
 }
 
 type Entity {
   id: ID!
   type: String!
   attrs: JSON!
+  neighbors: [EntityNeighbor!]
+}
+
+type EntityNeighbor {
+  id: ID!
+  type: String!
+  relType: String!
+  isOutgoing: Boolean!
+}
+
+type EntityWithNeighbors {
+  id: ID!
+  type: String!
+  attrs: JSON!
+  neighbors: [EntityNeighbor!]!
+}
+
+type Mutation {
+  upsertEntities(input: [EntityInput!]!): Boolean!
+  upsertRelationships(input: [RelationshipInput!]!): Boolean!
 }
 
 input EntityInput {
