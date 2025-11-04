@@ -38,7 +38,8 @@ export function useEntities(
         params.set('order', order)
         if (limit) params.set('limit', limit.toString())
         
-        const response = await fetch(`http://localhost:8081/entities?${params}`)
+        const ontologyUrl = import.meta.env.VITE_ONTOLOGY_URL || 'http://localhost:8081'
+        const response = await fetch(`${ontologyUrl}/entities?${params}`)
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
         const data: Entity[] = await response.json()
         

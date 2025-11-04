@@ -4,10 +4,19 @@ import cytoscape from 'cytoscape'
 import type { Core } from 'cytoscape'
 import { onFocus } from '@/store/bus'
 import { useSelectionStore } from '@/store/selectionStore'
+import { showToast } from '@/components/Toast'
 
 type Elem = { nodes:any[]; edges:any[] }
 
-export default function GraphCanvas({ elements }:{ elements:Elem }) {
+export default function GraphCanvas({ 
+  elements,
+  followLive = false,
+  latestEntity = null
+}: { 
+  elements: Elem
+  followLive?: boolean
+  latestEntity?: any
+}) {
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<Core | null>(null)
   const [initialized, setInitialized] = useState(false)
@@ -109,6 +118,27 @@ export default function GraphCanvas({ elements }:{ elements:Elem }) {
 
     return unsubscribe
   }, [initialized])
+
+  // Follow Live mode: throttle auto-center to latest entity (max 1 every 2s)
+  const lastCenterTime = useRef<number>(0)
+  useEffect(() => {
+    if (!followLive || !latestEntity || !cyRef.current || !initialized) return
+    
+    const node = cyRef.current.getElementById(latestEntity.id)
+    if (!node || node.empty()) return
+    
+    const now = Date.now()
+    if (now - lastCenterTime.current < 2000) {
+      // Too soon, show toast instead
+      showToast(`New event: ${latestEntity.type || latestEntity.id}`)
+      return
+    }
+    
+    lastCenterTime.current = now
+    cyRef.current.elements().removeClass('selected')
+    node.addClass('selected')
+    cyRef.current.animate({ fit: { eles: node, padding: 50 }, duration: 250 })
+  }, [followLive, latestEntity, initialized])
 
   return (
     <div 

@@ -3,10 +3,19 @@ import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { onFocus } from '@/store/bus'
 import { useSelectionStore } from '@/store/selectionStore'
+import { showToast } from '@/components/Toast'
 
 type Loc = { id:string; lat:number; lon:number; attrs:any; type?:string }
 
-export default function MapCanvas({ locations }:{ locations:Loc[] }) {
+export default function MapCanvas({ 
+  locations,
+  followLive = false,
+  latestEntity = null
+}: { 
+  locations: Loc[]
+  followLive?: boolean
+  latestEntity?: any
+}) {
   const map = useRef<maplibregl.Map|null>(null)
   const wrap = useRef<HTMLDivElement|null>(null)
   const markers = useRef(new Map<string, maplibregl.Marker>())
@@ -72,6 +81,29 @@ export default function MapCanvas({ locations }:{ locations:Loc[] }) {
     const t = setTimeout(renderMarkers, 150)
     return () => clearTimeout(t)
   }, [renderMarkers])
+
+  // Follow Live mode: throttle auto-pan to latest entity (max 1 every 2s)
+  const lastPanTime = useRef<number>(0)
+  useEffect(() => {
+    if (!followLive || !latestEntity || !map.current) return
+    
+    const loc = locations.find(l => l.id === latestEntity.id)
+    if (!loc || typeof loc.lat !== 'number' || typeof loc.lon !== 'number') return
+    
+    const now = Date.now()
+    if (now - lastPanTime.current < 2000) {
+      // Too soon, show toast instead if not following
+      showToast(`New event: ${latestEntity.type || latestEntity.id}`)
+      return
+    }
+    
+    lastPanTime.current = now
+    map.current.flyTo({
+      center: [loc.lon, loc.lat],
+      zoom: 12,
+      duration: 1500
+    })
+  }, [followLive, latestEntity, locations])
 
   useEffect(() => {
     const unsubscribe = onFocus(({ id }) => {
