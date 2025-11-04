@@ -2,7 +2,7 @@
 # Phase 6A Alerts & Actions Smoke Test
 # This script verifies the alerts subsystem end-to-end
 
-set -e
+# Don't exit on errors - we want to continue checking all components
 
 GATEWAY_URL="http://localhost:8088"
 GQL_URL="${GATEWAY_URL}/graphql"
