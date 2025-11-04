@@ -2,13 +2,15 @@
 // For now, we'll use a basic validation until ajv is available
 import type { DashboardExportV1 } from "@/types/dashboardExport"
 
-export interface ValidationResult {
-  ok: true
-  data: DashboardExportV1
-} | {
-  ok: false
-  errors: { path: string; message: string }[]
-}
+export type ValidationResult =
+  | {
+      ok: true
+      data: DashboardExportV1
+    }
+  | {
+      ok: false
+      errors: { path: string; message: string }[]
+    }
 
 // Basic validation (can be replaced with AJV later)
 export function validateDashboardExport(input: unknown): ValidationResult {
