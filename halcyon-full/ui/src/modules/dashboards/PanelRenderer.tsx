@@ -9,29 +9,104 @@ import { TopBarPanel } from './panels/TopBarPanel'
 import { GeoHeatPanel } from './panels/GeoHeatPanel'
 import { gql } from '@/services/api'
 import { Card } from '@/components/Card'
+import { EmptyState } from '@/components/EmptyState'
+import { inferShape, isShapeCompatible, getExpectedShape, getPanelHint, getShapeLabel, type QueryShape } from '@/lib/queryShapes'
+import { savedApi } from '@/store/savedStore'
+import { AlertDialog } from '@/components/AlertDialog'
 
-export default function PanelRenderer({ type, query, refreshSec = 30, config }: { type: PanelType; query: SavedQuery; refreshSec?: number; config?: Record<string, unknown> }) {
+export default function PanelRenderer({ 
+  type, 
+  query, 
+  refreshSec = 30, 
+  config,
+  onQueryChange
+}: { 
+  type: PanelType
+  query?: SavedQuery | null
+  refreshSec?: number
+  config?: Record<string, unknown>
+  onQueryChange?: () => void
+}) {
   const [data, setData] = React.useState<any>(null)
   const [error, setError] = React.useState<string | null>(null)
-  const [loading, setLoading] = React.useState(true)
+  const [loading, setLoading] = React.useState(false)
+  const [shapeMismatch, setShapeMismatch] = React.useState<{ detected: QueryShape; expected: QueryShape | QueryShape[] } | null>(null)
+  const [alertDialog, setAlertDialog] = React.useState<{ isOpen: boolean; title: string; message: string }>({
+    isOpen: false,
+    title: '',
+    message: ''
+  })
 
   React.useEffect(() => {
+    if (!query) {
+      setData(null)
+      setError(null)
+      setLoading(false)
+      setShapeMismatch(null)
+      return
+    }
+
     let cancelled = false
     let intervalId: number | undefined
 
     const fetchData = async () => {
       setLoading(true)
+      setError(null)
       try {
         const result = await gql<any>(query.gql, {})
         if (!cancelled) {
           setData(result)
-          setError(null)
+          
+          // Infer and validate shape
+          const shapeInfo = inferShape(result)
+          const expected = getExpectedShape(type)
+          const compatible = isShapeCompatible(shapeInfo.shape, type)
+          
+          if (!compatible && shapeInfo.confidence === 'high') {
+            setShapeMismatch({
+              detected: shapeInfo.shape,
+              expected: expected
+            })
+            
+            // Non-blocking alert
+            const expectedLabels = Array.isArray(expected) 
+              ? expected.map(s => getShapeLabel(s)).join(' or ')
+              : getShapeLabel(expected)
+            
+            setAlertDialog({
+              isOpen: true,
+              title: 'Query Shape Mismatch',
+              message: `This query returns ${getShapeLabel(shapeInfo.shape)}; this panel expects ${expectedLabels}. The panel will show an empty state until you change the query.`
+            })
+            
+            // Cache shapeHint if not set
+            if (!query.shapeHint && query.id) {
+              try {
+                await savedApi.updateQuery(query.id, { shapeHint: shapeInfo.shape })
+              } catch {
+                // Silent fail - shapeHint update is optional
+              }
+            }
+          } else {
+            setShapeMismatch(null)
+            
+            // Cache shapeHint if not set
+            if (!query.shapeHint && query.id && shapeInfo.confidence === 'high') {
+              try {
+                await savedApi.updateQuery(query.id, { shapeHint: shapeInfo.shape })
+              } catch {
+                // Silent fail
+              }
+            }
+          }
+          
           setLoading(false)
         }
       } catch (e: any) {
         if (!cancelled) {
           setError(e.message)
           setData(null)
+          setShapeMismatch(null)
           setLoading(false)
         }
       }
@@ -48,14 +123,63 @@ export default function PanelRenderer({ type, query, refreshSec = 30, config }: 
       cancelled = true
       if (intervalId) clearInterval(intervalId)
     }
-  }, [query.gql, refreshSec])
+  }, [query?.gql, query?.id, refreshSec, type])
+
+  // No query assigned
+  if (!query) {
+    return (
+      <EmptyState
+        title="No Query Selected"
+        message={getPanelHint(type)}
+        actionLabel={onQueryChange ? "Select Query" : undefined}
+        onAction={onQueryChange}
+      />
+    )
+  }
 
   if (loading) {
     return <div className="text-sm text-muted p-4">Loading...</div>
   }
 
   if (error) {
-    return <div className="text-red-400 text-sm p-4">Error: {error}</div>
+    return (
+      <div className="p-4">
+        <div className="text-red-400 text-sm mb-2">Error: {error}</div>
+        {onQueryChange && (
+          <button
+            onClick={onQueryChange}
+            className="text-xs text-teal-400 hover:text-teal-300 underline"
+          >
+            Change query
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  // Shape mismatch - show EmptyState
+  if (shapeMismatch) {
+    const expectedLabels = Array.isArray(shapeMismatch.expected)
+      ? shapeMismatch.expected.map(s => getShapeLabel(s)).join(' or ')
+      : getShapeLabel(shapeMismatch.expected)
+    
+    return (
+      <>
+        <EmptyState
+          title="Query Shape Mismatch"
+          message={`This query returns ${getShapeLabel(shapeMismatch.detected)}, but this panel expects ${expectedLabels}. Please select a compatible query.`}
+          actionLabel={onQueryChange ? "Change Query" : undefined}
+          onAction={onQueryChange}
+        />
+        <AlertDialog
+          isOpen={alertDialog.isOpen}
+          onClose={() => setAlertDialog({ isOpen: false, title: '', message: '' })}
+          title={alertDialog.title}
+          message={alertDialog.message}
+          variant="info"
+        />
+      </>
+    )
   }
 
   if (type === 'metric') {

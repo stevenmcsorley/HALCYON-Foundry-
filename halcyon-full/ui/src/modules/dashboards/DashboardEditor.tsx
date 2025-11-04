@@ -8,6 +8,7 @@ import { showToast } from '@/components/Toast'
 import { AlertDialog } from '@/components/AlertDialog'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { PromptDialog } from '@/components/PromptDialog'
+import { isShapeCompatible, getExpectedShape, getShapeLabel, getPanelHint, type QueryShape } from '@/lib/queryShapes'
 
 export default function DashboardEditor() {
   const { dashboards, panels, queries, loadDashboards, loadPanels, loadQueries } = useSavedStore()
@@ -66,7 +67,7 @@ export default function DashboardEditor() {
       await savedApi.createPanel(current, {
         title: `${type} panel`,
         type,
-        queryId: queryId || queries[0]?.id,
+        queryId: queryId, // No auto-assignment - start with no query
         refreshSec: 30,
         position: currPanels.length,
       })
@@ -392,19 +393,58 @@ export default function DashboardEditor() {
                   
                   {/* Per-panel query selector */}
                   <div className="mb-2 space-y-1">
-                    <label className="text-xs text-white/70 block">Query:</label>
-                    <select
-                      value={p.queryId || ''}
-                      onChange={(e) => updatePanelQuery(p.id, e.target.value || undefined)}
-                      className="w-full bg-black/30 rounded px-2 py-1 text-white text-xs"
-                    >
-                      <option value="">— No query —</option>
-                      {queries.map((q) => (
-                        <option key={q.id} value={q.id}>
-                          {q.name}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="space-y-1">
+                      <label className="text-xs text-white/70 block">Query:</label>
+                      <select
+                        data-panel-id={p.id}
+                        value={p.queryId || ''}
+                        onChange={(e) => updatePanelQuery(p.id, e.target.value || undefined)}
+                        className="w-full bg-black/30 rounded px-2 py-1 text-white text-xs"
+                      >
+                        <option value="">— No query —</option>
+                        {(() => {
+                          const expected = getExpectedShape(p.type)
+                          const compatible: SavedQuery[] = []
+                          const incompatible: SavedQuery[] = []
+                          
+                          queries.forEach((q) => {
+                            const shape: QueryShape = q.shapeHint || 'unknown'
+                            const isCompatible = isShapeCompatible(shape, p.type)
+                            if (isCompatible) {
+                              compatible.push(q)
+                            } else {
+                              incompatible.push(q)
+                            }
+                          })
+                          
+                          return (
+                            <>
+                              {compatible.length > 0 && (
+                                <optgroup label="✓ Compatible">
+                                  {compatible.map((q) => (
+                                    <option key={q.id} value={q.id}>
+                                      {q.name} {q.shapeHint && `[${getShapeLabel(q.shapeHint)}]`}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              {incompatible.length > 0 && (
+                                <optgroup label="⚠ Incompatible">
+                                  {incompatible.map((q) => (
+                                    <option key={q.id} value={q.id} disabled={false}>
+                                      {q.name} {q.shapeHint && `[${getShapeLabel(q.shapeHint)}]`}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                            </>
+                          )
+                        })()}
+                      </select>
+                      {!p.queryId && (
+                        <p className="text-xs text-white/50 italic mt-1">{getPanelHint(p.type)}</p>
+                      )}
+                    </div>
                   </div>
 
                   {/* Refresh interval */}
@@ -420,11 +460,20 @@ export default function DashboardEditor() {
                     />
                   </div>
 
-                  {query ? (
-                    <PanelRenderer type={p.type} query={query} refreshSec={p.refreshSec} config={p.config} />
-                  ) : (
-                    <div className="opacity-70 text-sm text-white mt-2">Assign a query to render panel</div>
-                  )}
+                  <PanelRenderer 
+                    type={p.type} 
+                    query={query || null} 
+                    refreshSec={p.refreshSec} 
+                    config={p.config}
+                    onQueryChange={() => {
+                      // Scroll to panel or highlight query selector - could be enhanced
+                      const selectEl = document.querySelector(`select[data-panel-id="${p.id}"]`) as HTMLSelectElement
+                      if (selectEl) {
+                        selectEl.focus()
+                        selectEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                      }
+                    }}
+                  />
                 </div>
               )
             })}

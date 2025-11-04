@@ -6,6 +6,7 @@ export type SavedQuery = {
   name: string
   gql: string
   owner?: string
+  shapeHint?: 'entities' | 'counts' | 'metric' | 'geo' | 'items' | 'unknown'
   createdAt?: string
   updatedAt?: string
 }
