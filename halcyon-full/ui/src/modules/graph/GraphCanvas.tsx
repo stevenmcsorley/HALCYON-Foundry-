@@ -45,8 +45,22 @@ export default function GraphCanvas({ elements }:{ elements:Elem }) {
     if (!cyRef.current) return
     cyRef.current.elements().remove()
     cyRef.current.add([...elements.nodes, ...elements.edges])
+    // Resize before running layout to ensure proper dimensions
+    cyRef.current.resize()
     cyRef.current.layout({ name:'breadthfirst', animate:true, animationDuration:300 }).run()
   }, [elements])
+  
+  // Handle container resize
+  useEffect(() => {
+    if (!cyRef.current || !ref.current) return
+    const resizeObserver = new ResizeObserver(() => {
+      if (cyRef.current) {
+        cyRef.current.resize()
+      }
+    })
+    resizeObserver.observe(ref.current)
+    return () => resizeObserver.disconnect()
+  }, [])
 
   useEffect(() => onFocus(({ id }) => {
     const n = cyRef.current?.getElementById(id)

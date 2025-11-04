@@ -63,9 +63,11 @@ export default function MapCanvas({ locations }:{ locations:Loc[] }) {
 
   useEffect(() => {
     const unsubscribe = onFocus(({ id }) => {
+      if (!map.current) return
+      
       // First try to find an existing marker
       const m = markers.current.get(id)
-      if (m && map.current) {
+      if (m) {
         const lngLat = m.getLngLat()
         map.current.flyTo({
           center: [lngLat.lng, lngLat.lat],
@@ -74,9 +76,10 @@ export default function MapCanvas({ locations }:{ locations:Loc[] }) {
         })
         return
       }
+      
       // If no marker exists, check if entity is in locations array
       const loc = locations.find(l => l.id === id)
-      if (loc && map.current) {
+      if (loc) {
         map.current.flyTo({
           center: [loc.lon, loc.lat],
           zoom: 12,
