@@ -1,0 +1,49 @@
+{
+  "dashboard": {
+    "title": "HALCYON Overview",
+    "panels": [
+      {
+        "title": "HTTP Request Rate",
+        "targets": [
+          {
+            "expr": "rate(halcyon_http_request_seconds_count[5m])",
+            "legendFormat": "{{service}}"
+          }
+        ],
+        "type": "graph"
+      },
+      {
+        "title": "HTTP Request Duration (p95)",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(halcyon_http_request_seconds_bucket[5m]))",
+            "legendFormat": "{{service}}"
+          }
+        ],
+        "type": "graph"
+      },
+      {
+        "title": "Entity Upserts",
+        "targets": [
+          {
+            "expr": "rate(halcyon_entity_upserts_total[5m])",
+            "legendFormat": "{{status}}"
+          }
+        ],
+        "type": "graph"
+      },
+      {
+        "title": "WebSocket Connections",
+        "targets": [
+          {
+            "expr": "halcyon_ws_connections",
+            "legendFormat": "connections"
+          }
+        ],
+        "type": "graph"
+      }
+    ],
+    "schemaVersion": 27,
+    "version": 0
+  }
+}

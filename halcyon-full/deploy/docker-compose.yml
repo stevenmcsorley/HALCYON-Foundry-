@@ -81,7 +81,38 @@ services:
       - ../ui:/usr/src/app
     depends_on: [ gateway ]
 
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports: [ "${PROMETHEUS_PORT:-9090}:9090" ]
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus:/prometheus
+    depends_on: [ ontology, gateway, registry, enrichment ]
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+    ports: [ "${GRAFANA_PORT:-3000}:3000" ]
+    volumes:
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana:/var/lib/grafana
+    depends_on: [ prometheus ]
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    environment:
+      COLLECTOR_OTLP_ENABLED: true
+    ports: [ "16686:16686", "4317:4317", "4318:4318" ]
+
 volumes:
   pg: {}
   neo4j: {}
   redis: {}
+  prometheus: {}
+  grafana: {}

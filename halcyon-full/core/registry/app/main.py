@@ -2,6 +2,11 @@ import os, yaml, asyncio
 from fastapi import FastAPI
 from pydantic_settings import BaseSettings
 import httpx
+from .logging import setup_logging
+from .health import router as health_router
+from .tracing import setup_tracing
+
+setup_logging()
 
 class Settings(BaseSettings):
   app_host: str = "0.0.0.0"
@@ -11,6 +16,8 @@ class Settings(BaseSettings):
 
 settings = Settings()
 app = FastAPI(title="HALCYON Registry", version="0.1.0")
+
+setup_tracing(app)
 
 async def register_plugin(manifest_path: str):
   with open(manifest_path, "r", encoding="utf-8") as f:
@@ -37,5 +44,4 @@ async def load_all():
         tasks.append(register_plugin(os.path.join(root, fn)))
   if tasks: await asyncio.gather(*tasks)
 
-@app.get("/healthz")
-async def healthz(): return {"status": "ok"}
+app.include_router(health_router)
