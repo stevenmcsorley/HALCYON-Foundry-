@@ -1,4 +1,5 @@
 from typing import Iterable
+from datetime import datetime
 from neo4j import AsyncGraphDatabase
 import asyncpg
 from .models import EntityType, RelationshipType, EntityInstance, RelationshipInstance
@@ -59,11 +60,16 @@ class GraphStore:
             tx = await session.begin_transaction()
             try:
                 for e in entities:
+                    # Ensure timestamp is present (server-generated ISO if missing)
+                    attrs = dict(e.attrs) if e.attrs else {}
+                    if "timestamp" not in attrs:
+                        attrs["timestamp"] = datetime.utcnow().isoformat() + "Z"
+                    
                     # Use backticks for label with special characters, escape if needed
                     label = e.type.replace('`', '``')  # Escape backticks in label
                     await tx.run(
-                        f"MERGE (n:`{label}` {{id:$id}}) SET n += $attrs",
-                        id=e.id, attrs=e.attrs
+                        f"MERGE (n:`{label}` {{id:$id}}) SET n += $attrs, n.id = $id",
+                        id=e.id, attrs=attrs
                     )
                 await tx.commit()
             except Exception:
@@ -77,13 +83,18 @@ class GraphStore:
             tx = await session.begin_transaction()
             try:
                 for r in rels:
+                    # Ensure timestamp is present (server-generated ISO if missing)
+                    attrs = dict(r.attrs) if r.attrs else {}
+                    if "timestamp" not in attrs:
+                        attrs["timestamp"] = datetime.utcnow().isoformat() + "Z"
+                    
                     rel_type = r.type.replace('`', '``')  # Escape backticks in relationship type
                     await tx.run(
                         f"""
                         MATCH (a {{id:$from_id}}), (b {{id:$to_id}})
                         MERGE (a)-[x:`{rel_type}`]->(b)
                         SET x += $attrs
-                        """, from_id=r.from_id, to_id=r.to_id, attrs=r.attrs
+                        """, from_id=r.from_id, to_id=r.to_id, attrs=attrs
                     )
                 await tx.commit()
             except Exception:
