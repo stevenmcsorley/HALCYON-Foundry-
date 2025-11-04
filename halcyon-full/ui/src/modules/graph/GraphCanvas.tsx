@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react'
-import cytoscape, { Core } from 'cytoscape'
+import * as cytoscape from 'cytoscape'
+import type { Core } from 'cytoscape'
 import { onFocus } from '@/store/bus'
 import { useSelectionStore } from '@/store/selectionStore'
 
@@ -40,16 +41,16 @@ export default function GraphCanvas({ elements }:{ elements:Elem }) {
         return
       }
       
-      try {
-        cyRef.current = cytoscape({ 
-          container: ref.current,
-          elements: [],
-          style: [
-            { selector: 'node', style: { 'background-color':'#22d3ee', 'label':'data(label)', 'color':'#cbd5e1', 'font-size':12 } },
-            { selector: 'edge', style: { 'line-color':'#64748b', 'target-arrow-color':'#64748b', 'target-arrow-shape':'triangle', 'curve-style':'bezier', 'label':'data(label)', 'font-size':10, 'text-rotation':'autorotate' } },
-            { selector: '.selected', style: { 'border-width': 4, 'border-color':'#fff' } }
-          ]
-        })
+             try {
+         cyRef.current = (cytoscape as any).default({ 
+           container: ref.current,
+           elements: [],
+           style: [
+             { selector: 'node', style: { 'background-color':'#22d3ee', 'label':'data(label)', 'color':'#cbd5e1', 'font-size':12 } },
+             { selector: 'edge', style: { 'line-color':'#64748b', 'target-arrow-color':'#64748b', 'target-arrow-shape':'triangle', 'curve-style':'bezier', 'label':'data(label)', 'font-size':10, 'text-rotation':'autorotate' } },
+             { selector: '.selected', style: { 'border-width': 4, 'border-color':'#fff' } }
+           ]
+         })
         
         cyRef.current.on('tap', 'node', (ev) => {
           const id = ev.target.id(); const type = ev.target.data('type')
@@ -137,10 +138,11 @@ export default function GraphCanvas({ elements }:{ elements:Elem }) {
   }, [])
 
   useEffect(() => onFocus(({ id }) => {
-    const n = cyRef.current?.getElementById(id)
+    if (!cyRef.current) return
+    const n = cyRef.current.getElementById(id)
     if (n && n.nonempty()) {
-      cyRef.current!.elements().removeClass('selected'); n.addClass('selected')
-      cyRef.current!.animate({ fit: { eles: n, padding: 50 }, duration: 250 })
+      cyRef.current.elements().removeClass('selected'); n.addClass('selected')
+      cyRef.current.animate({ fit: { eles: n, padding: 50 }, duration: 250 })
     }
   }), [])
 
