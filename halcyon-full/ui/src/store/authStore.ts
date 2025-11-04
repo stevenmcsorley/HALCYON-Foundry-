@@ -6,6 +6,7 @@ type AuthState = {
   user: auth.User | null
   loading: boolean
   login: (username: string, password: string) => Promise<void>
+  refresh: () => Promise<void>
   logout: () => void
   initialize: () => void
 }
@@ -21,6 +22,16 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ token, user, loading: false })
     } catch (error) {
       set({ loading: false })
+      throw error
+    }
+  },
+  refresh: async () => {
+    try {
+      const { token, user } = await auth.refresh()
+      set({ token, user })
+    } catch (error) {
+      // Refresh failed, user will be logged out by auth.refresh()
+      set({ token: null, user: null })
       throw error
     }
   },

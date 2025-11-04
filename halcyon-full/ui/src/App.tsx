@@ -20,6 +20,13 @@ export default function App() {
     initialize()
   }, [initialize])
 
+  // Helper to check if user has a specific role
+  const hasRole = (role: string): boolean => {
+    if (DEV_MODE) return true // DEV_MODE allows all roles
+    if (!user) return false
+    return user.roles.includes(role)
+  }
+
   if (!isAuthenticated && !DEV_MODE) {
     return <LoginForm />
   }
@@ -28,18 +35,34 @@ export default function App() {
     <div className="min-h-screen bg-surface text-white">
       <header className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
         <h1 className="text-xl font-semibold">HALCYON Console</h1>
-        <div className="flex items-center gap-4">
-          <div className="text-sm text-muted">Config-driven • Ontology-first</div>
-          <UserMenu />
-        </div>
+        <UserMenu />
       </header>
-      <main className="grid grid-cols-12 gap-3 p-3">
-        <section className="col-span-4 bg-panel rounded-xl p-3"><ListPanel /></section>
-        <section className="col-span-8 bg-panel rounded-xl p-3"><MapPanel /></section>
-        <section className="col-span-6 bg-panel rounded-xl p-3"><GraphPanel /></section>
-        <section className="col-span-6 bg-panel rounded-xl p-3"><TimelinePanel /></section>
-      </main>
+      
+      <div className="grid grid-cols-2 h-[calc(100vh-4rem)]">
+        <div className="border-r border-white/10">
+          <MapPanel />
+        </div>
+        <div>
+          <GraphPanel />
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-2 border-t border-white/10 h-[calc(100vh-4rem)]">
+        <div className="border-r border-white/10">
+          <ListPanel />
+        </div>
+        <div>
+          <TimelinePanel />
+        </div>
+      </div>
+
       <EntityInspector />
+      
+      {/* Example: Role-based conditional rendering
+      {hasRole('admin') && (
+        <AdminPanel />
+      )}
+      */}
     </div>
   )
 }

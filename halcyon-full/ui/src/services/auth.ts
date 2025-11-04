@@ -8,6 +8,7 @@ const DEV_MODE = !devModeEnv || devModeEnv === 'true' || devModeEnv === '1'
 
 const DISCOVERY_URL = `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/.well-known/openid-configuration`
 const TOKEN_KEY = 'halcyon_token'
+const REFRESH_TOKEN_KEY = 'halcyon_refresh_token'
 const USER_KEY = 'halcyon_user'
 
 export interface User {
@@ -25,7 +26,7 @@ async function getDiscovery(): Promise<any> {
   return discoveryCache
 }
 
-export async function login(username: string, password: string): Promise<{ token: string; user: User }> {
+export async function login(username: string, password: string): Promise<{ token: string; user: User; refreshToken?: string }> {
   if (DEV_MODE) {
     // In dev mode, create a mock token
     const mockUser: User = {
@@ -59,6 +60,7 @@ export async function login(username: string, password: string): Promise<{ token
 
   const data = await res.json()
   const token = data.access_token
+  const refreshToken = data.refresh_token
 
   // Decode token to get user info (simple base64 decode for JWT payload)
   const payload = JSON.parse(atob(token.split('.')[1]))
@@ -70,12 +72,72 @@ export async function login(username: string, password: string): Promise<{ token
 
   localStorage.setItem(TOKEN_KEY, token)
   localStorage.setItem(USER_KEY, JSON.stringify(user))
+  if (refreshToken) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
+  }
+
+  return { token, user, refreshToken }
+}
+
+export async function refresh(): Promise<{ token: string; user: User }> {
+  if (DEV_MODE) {
+    // In dev mode, just return current token
+    const token = getToken()
+    const user = getUser()
+    if (!token || !user) throw new Error('No token to refresh in DEV_MODE')
+    return { token, user }
+  }
+
+  const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
+  if (!refreshToken) {
+    throw new Error('No refresh token available')
+  }
+
+  const discovery = await getDiscovery()
+  const tokenUrl = discovery.token_endpoint
+
+  const params = new URLSearchParams({
+    grant_type: 'refresh_token',
+    client_id: KEYCLOAK_CLIENT_ID,
+    refresh_token: refreshToken,
+  })
+
+  const res = await fetch(tokenUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params,
+  })
+
+  if (!res.ok) {
+    // Refresh failed, clear tokens and throw
+    logout()
+    throw new Error('Token refresh failed')
+  }
+
+  const data = await res.json()
+  const token = data.access_token
+  const newRefreshToken = data.refresh_token
+
+  // Decode token to get user info
+  const payload = JSON.parse(atob(token.split('.')[1]))
+  const user: User = {
+    sub: payload.sub,
+    email: payload.email,
+    roles: payload.realm_access?.roles || payload.resource_access?.[KEYCLOAK_CLIENT_ID]?.roles || [],
+  }
+
+  localStorage.setItem(TOKEN_KEY, token)
+  localStorage.setItem(USER_KEY, JSON.stringify(user))
+  if (newRefreshToken) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, newRefreshToken)
+  }
 
   return { token, user }
 }
 
 export function logout(): void {
   localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(REFRESH_TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
   window.location.href = '/'
 }

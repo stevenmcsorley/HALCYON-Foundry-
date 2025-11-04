@@ -1,35 +1,46 @@
 from prometheus_client import Counter, Histogram, Gauge
 
-# HTTP request duration histogram
+# HTTP request metrics
 http_request_duration = Histogram(
-    "halcyon_http_request_seconds",
+    "http_request_duration_seconds",
     "HTTP request duration in seconds",
     ["method", "endpoint", "status"],
 )
 
-# WebSocket connections gauge
+# WebSocket metrics
 ws_connections = Gauge(
-    "halcyon_ws_connections",
-    "Number of active WebSocket connections",
+    "ws_connections_total",
+    "Current number of WebSocket connections",
 )
 
-# Entity upsert counter
+# Entity/relationship upsert metrics
 entity_upserts = Counter(
-    "halcyon_entity_upserts_total",
+    "entity_upserts_total",
     "Total number of entity upserts",
-    ["status"],
+    ["entity_type"],
 )
 
-# Relationship upsert counter
 relationship_upserts = Counter(
-    "halcyon_relationship_upserts_total",
+    "relationship_upserts_total",
     "Total number of relationship upserts",
-    ["status"],
+    ["relationship_type"],
 )
 
-# Policy evaluation duration
-policy_eval_duration = Histogram(
-    "halcyon_policy_eval_seconds",
+# Policy evaluation metrics
+policy_evaluation_duration = Histogram(
+    "policy_evaluation_duration_seconds",
     "Policy evaluation duration in seconds",
-    ["decision"],
+)
+
+# Authentication metrics
+auth_success_total = Counter(
+    "auth_success_total",
+    "Total number of successful authentications",
+    ["method"],  # method: "jwt", "dev_mode", etc.
+)
+
+auth_failure_total = Counter(
+    "auth_failure_total",
+    "Total number of failed authentication attempts",
+    ["reason"],  # reason: "invalid_token", "missing_token", "expired_token", etc.
 )

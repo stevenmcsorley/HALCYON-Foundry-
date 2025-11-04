@@ -1,7 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from ariadne.asgi import GraphQL
 from ariadne import make_executable_schema, load_schema_from_path
+import uuid
 from .config import settings
 from .clients import OntologyClient, PolicyClient
 from .resolvers import query, mutation
@@ -31,6 +32,22 @@ app.add_middleware(
 
 # Add auth middleware AFTER CORS
 app.add_middleware(AuthMiddleware)
+
+# Middleware to add X-Trace-ID to all responses
+@app.middleware("http")
+async def add_trace_id(request: Request, call_next):
+    # Use existing trace ID from headers if present, otherwise generate one
+    trace_id = request.headers.get("X-Trace-ID") or str(uuid.uuid4())
+    
+    # Store in request state for logging
+    request.state.trace_id = trace_id
+    
+    response = await call_next(request)
+    
+    # Add X-Trace-ID to response headers
+    response.headers["X-Trace-ID"] = trace_id
+    
+    return response
 
 ontology_client = OntologyClient()
 policy_client = PolicyClient()

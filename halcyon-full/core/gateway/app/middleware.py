@@ -4,6 +4,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from typing import Callable
 from .auth import verify_token, extract_roles
 from .config import settings
+from .metrics import auth_success_total, auth_failure_total
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -28,7 +29,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     "email": "dev@halcyon.local",
                     "roles": settings.default_roles,
                 }
+                auth_success_total.labels(method="dev_mode").inc()
                 return await call_next(request)
+            auth_failure_total.labels(reason="missing_token").inc()
             response = JSONResponse(
                 status_code=401,
                 content={"detail": "Missing or invalid Authorization header"}
@@ -53,7 +56,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     "email": "dev@halcyon.local",
                     "roles": settings.default_roles,
                 }
+                auth_success_total.labels(method="dev_mode").inc()
                 return await call_next(request)
+            auth_failure_total.labels(reason="invalid_token").inc()
             response = JSONResponse(
                 status_code=401,
                 content={"detail": "Invalid or expired token"}
@@ -70,6 +75,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "email": payload.get("email"),
             "roles": roles or settings.default_roles,
         }
+
+        auth_success_total.labels(method="jwt").inc()
 
         response = await call_next(request)
         return response
