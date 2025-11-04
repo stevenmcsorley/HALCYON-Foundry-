@@ -72,7 +72,7 @@ export default function DashboardEditor() {
       })
       await loadPanels(current)
     } catch (e: any) {
-      alert(`Error: ${e.message}`)
+      setAlertDialog({ isOpen: true, title: 'Error', message: e.message, variant: 'error' })
     } finally {
       setBusy(false)
     }
@@ -84,7 +84,7 @@ export default function DashboardEditor() {
       await savedApi.updatePanel(current, panelId, { queryId })
       await loadPanels(current)
     } catch (e: any) {
-      alert(`Error: ${e.message}`)
+      setAlertDialog({ isOpen: true, title: 'Error', message: e.message, variant: 'error' })
     }
   }
 
@@ -206,7 +206,7 @@ export default function DashboardEditor() {
       await savedApi.deletePanel(current, id)
       await loadPanels(current)
     } catch (e: any) {
-      alert(`Error: ${e.message}`)
+      setAlertDialog({ isOpen: true, title: 'Error', message: e.message, variant: 'error' })
     } finally {
       setBusy(false)
     }
