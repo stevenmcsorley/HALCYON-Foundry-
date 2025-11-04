@@ -89,23 +89,61 @@ export const savedApi = {
     }).then(() => undefined),
 
   getDashboard: (id: string): Promise<Dashboard & { panels: DashboardPanel[] }> =>
-    fetch(`${API}/dashboards/${id}`, { credentials: 'include' }).then(j),
+    fetch(`${API}/dashboards/${id}`, { credentials: 'include' }).then(j).then((d: any) => ({
+      ...d,
+      panels: (d.panels || []).map((p: any) => ({
+        ...p,
+        queryId: p.config?.queryId || p.config_json?.queryId,
+        refreshSec: p.config?.refreshSec || p.config_json?.refreshSec,
+        config: p.config || p.config_json || {},
+      })),
+    })),
 
   createPanel: (dashboardId: string, p: Omit<DashboardPanel, 'id' | 'dashboardId'>): Promise<DashboardPanel> =>
     fetch(`${API}/dashboards/${dashboardId}/panels`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(p),
+      body: JSON.stringify({
+        title: p.title,
+        type: p.type,
+        position: p.position ?? 0,
+        config_json: {
+          ...(p.config || {}),
+          queryId: p.queryId,
+          refreshSec: p.refreshSec,
+        },
+      }),
       credentials: 'include'
-    }).then(j),
+    }).then(j).then((resp: any) => ({
+      ...resp,
+      queryId: resp.config?.queryId || resp.config_json?.queryId,
+      refreshSec: resp.config?.refreshSec || resp.config_json?.refreshSec,
+      config: resp.config || resp.config_json || {},
+    })),
   
   updatePanel: (dashboardId: string, panelId: string, p: Partial<DashboardPanel>): Promise<DashboardPanel> =>
     fetch(`${API}/dashboards/${dashboardId}/panels/${panelId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(p),
+      body: JSON.stringify({
+        ...(p.title !== undefined && { title: p.title }),
+        ...(p.type !== undefined && { type: p.type }),
+        ...(p.position !== undefined && { position: p.position }),
+        ...((p.config !== undefined || p.queryId !== undefined || p.refreshSec !== undefined) && {
+          config_json: {
+            ...(p.config || {}),
+            ...(p.queryId !== undefined && { queryId: p.queryId }),
+            ...(p.refreshSec !== undefined && { refreshSec: p.refreshSec }),
+          },
+        }),
+      }),
       credentials: 'include'
-    }).then(j),
+    }).then(j).then((resp: any) => ({
+      ...resp,
+      queryId: resp.config?.queryId || resp.config_json?.queryId,
+      refreshSec: resp.config?.refreshSec || resp.config_json?.refreshSec,
+      config: resp.config || resp.config_json || {},
+    })),
   
   deletePanel: (dashboardId: string, panelId: string): Promise<void> =>
     fetch(`${API}/dashboards/${dashboardId}/panels/${panelId}`, {
