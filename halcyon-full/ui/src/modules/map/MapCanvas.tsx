@@ -4,7 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import { onFocus } from '@/store/bus'
 import { useSelectionStore } from '@/store/selectionStore'
 
-type Loc = { id:string; lat:number; lon:number; attrs:any }
+type Loc = { id:string; lat:number; lon:number; attrs:any; type?:string }
 
 export default function MapCanvas({ locations }:{ locations:Loc[] }) {
   const map = useRef<maplibregl.Map|null>(null)
@@ -28,7 +28,7 @@ export default function MapCanvas({ locations }:{ locations:Loc[] }) {
       seen.add(l.id)
       if (!markers.current.get(l.id)) {
         const el = document.createElement('div'); el.className = 'w-3 h-3 rounded-full bg-teal-400 border border-white/50'
-        el.onclick = () => setSel({ id: l.id, type: 'Location' })
+        el.onclick = () => setSel({ id: l.id, type: l.type || 'Location' })
         const m = new maplibregl.Marker({ element: el }).setLngLat([l.lon, l.lat]).addTo(map.current!)
         markers.current.set(l.id, m)
       } else {
@@ -46,6 +46,7 @@ export default function MapCanvas({ locations }:{ locations:Loc[] }) {
 
   useEffect(() => {
     const unsubscribe = onFocus(({ id }) => {
+      // First try to find an existing marker
       const m = markers.current.get(id)
       if (m && map.current) {
         const lngLat = m.getLngLat()
@@ -54,10 +55,20 @@ export default function MapCanvas({ locations }:{ locations:Loc[] }) {
           zoom: 12,
           duration: 1500
         })
+        return
+      }
+      // If no marker exists, check if entity is in locations array
+      const loc = locations.find(l => l.id === id)
+      if (loc && map.current) {
+        map.current.flyTo({
+          center: [loc.lon, loc.lat],
+          zoom: 12,
+          duration: 1500
+        })
       }
     })
     return unsubscribe
-  }, [])
+  }, [locations])
 
   return <div ref={wrap} className="h-64 rounded-lg overflow-hidden" />
 }

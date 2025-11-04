@@ -7,13 +7,15 @@ export const MapPanel: React.FC = () => {
   const { entities, loading, error } = useEntities()
 
   const locations = useMemo(() => {
+    // Show ALL entities with lat/lon (not just Location type)
     return entities
-      .filter((e) => e.type === 'Location' && typeof e.attrs.lat === 'number' && typeof e.attrs.lon === 'number')
+      .filter((e) => typeof e.attrs.lat === 'number' && typeof e.attrs.lon === 'number')
       .map((e) => ({
         id: e.id,
         lat: e.attrs.lat as number,
         lon: e.attrs.lon as number,
-        attrs: e.attrs
+        attrs: e.attrs,
+        type: e.type
       }))
   }, [entities])
 
