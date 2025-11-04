@@ -27,6 +27,24 @@ async def patch_ontology(patch: OntologyPatch, metastore: MetaStore = Depends(ge
 @router.post("/entities:upsert", status_code=204)
 async def upsert_entities(payload: list[EntityInstance], graph: GraphStore = Depends(get_graph)):
     await graph.upsert_entities(payload)
+    
+    # Publish to Redis for WebSocket broadcasting (same as Gateway mutation)
+    try:
+        import redis.asyncio as redis
+        import json
+        import os
+        redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+        channel = os.getenv("WS_CHANNEL", "halcyon.stream")
+        r = redis.from_url(redis_url, decode_responses=True)
+        for entity in payload:
+            msg = {"t": "entity.upsert", "data": {"id": entity.id, "type": entity.type, "attrs": entity.attrs or {}}}
+            await r.publish(channel, json.dumps(msg))
+        await r.aclose()
+    except Exception as e:
+        # Log but don't fail - Redis publishing is best-effort
+        import logging
+        logging.getLogger("ontology").warning(f"Failed to publish to Redis: {e}")
+    
     return
 
 

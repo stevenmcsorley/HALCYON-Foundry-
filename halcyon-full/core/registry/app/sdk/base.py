@@ -77,34 +77,28 @@ class BaseConnector(ABC):
             except Exception as e:
                 logger.debug(f"[{self.connector_id}] Failed to cache raw document: {e}")
             
-            # Send to Gateway via GraphQL mutation
-            if gateway_url:
+            # Send directly to Ontology service (bypass Gateway auth)
+            # Gateway requires auth, but Registry is a backend service
+            # Use ONTOLOGY_BASE_URL if available, otherwise try gateway_url
+            ontology_url = os.getenv("ONTOLOGY_BASE_URL") or (gateway_url.replace("/graphql", "").replace(":8088", ":8081") if gateway_url else None)
+            
+            if ontology_url:
                 try:
                     import httpx
-                    mutation = """
-                    mutation UpsertEntity($input: EntityInput!) {
-                      entities:upsert(input: $input) {
-                        id
-                        type
-                      }
+                    entity_payload = {
+                        "id": mapped["id"],
+                        "type": mapped["type"],
+                        "attrs": mapped.get("attrs", {})
                     }
-                    """
-                    variables = {
-                        "input": {
-                            "id": mapped["id"],
-                            "type": mapped["type"],
-                            "attrs": mapped.get("attrs", {})
-                        }
-                    }
-                    async with httpx.AsyncClient(base_url=gateway_url, timeout=10) as client:
+                    async with httpx.AsyncClient(base_url=ontology_url, timeout=10) as client:
                         response = await client.post(
-                            "/graphql",
-                            json={"query": mutation, "variables": variables},
+                            "/entities:upsert",
+                            json=[entity_payload],  # Ontology expects array
                             headers={"Content-Type": "application/json"}
                         )
                         response.raise_for_status()
                 except Exception as e:
-                    logger.error(f"[{self.connector_id}] Failed to send entity to Gateway: {e}")
+                    logger.error(f"[{self.connector_id}] Failed to send entity to Ontology: {e}")
                     # Continue - we still count the event as emitted
             
             connector_events_total.labels(connector_id=self.connector_id).inc()
