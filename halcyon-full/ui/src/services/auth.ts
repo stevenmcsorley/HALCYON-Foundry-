@@ -1,10 +1,6 @@
 const KEYCLOAK_URL = import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8089'
 const KEYCLOAK_REALM = import.meta.env.VITE_KEYCLOAK_REALM || 'halcyon-dev'
 const KEYCLOAK_CLIENT_ID = import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'halcyon-ui'
-// Default to DEV_MODE=true for local development (bypass Keycloak)
-// In Vite, undefined env vars become empty string, so check for that too
-const devModeEnv = import.meta.env.VITE_DEV_MODE
-const DEV_MODE = !devModeEnv || devModeEnv === 'true' || devModeEnv === '1'
 
 const DISCOVERY_URL = `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/.well-known/openid-configuration`
 const TOKEN_KEY = 'halcyon_token'
@@ -28,19 +24,6 @@ async function getDiscovery(): Promise<any> {
 }
 
 export async function login(username: string, password: string): Promise<{ token: string; user: User; refreshToken?: string }> {
-  if (DEV_MODE) {
-    // In dev mode, create a mock token
-    const mockUser: User = {
-      sub: username,
-      email: `${username}@halcyon.local`,
-      roles: username === 'admin' ? ['admin'] : ['analyst'],
-    }
-    const mockToken = btoa(JSON.stringify(mockUser))
-    localStorage.setItem(TOKEN_KEY, mockToken)
-    localStorage.setItem(USER_KEY, JSON.stringify(mockUser))
-    return { token: mockToken, user: mockUser }
-  }
-
   const discovery = await getDiscovery()
   const tokenUrl = discovery.token_endpoint
 
@@ -92,16 +75,6 @@ export async function refresh(): Promise<{ token: string; user: User }> {
   // Start a new refresh
   refreshPromise = (async () => {
     try {
-      if (DEV_MODE) {
-        // In dev mode, just return current token
-        const token = getToken()
-        const user = getUser()
-        if (!token || !user) {
-          throw new Error('No token to refresh in DEV_MODE')
-        }
-        return { token, user }
-      }
-
       const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
       if (!refreshToken) {
         throw new Error('No refresh token available')
@@ -186,5 +159,5 @@ export function hasRoleAny(userRoles: string[], requiredRoles: string[]): boolea
 }
 
 export function isAuthenticated(): boolean {
-  return !!getToken() || DEV_MODE
+  return !!getToken()
 }

@@ -33,18 +33,44 @@ export const useAlertsStore = create<State>((set, get) => ({
   unread: 0,
   filters: {},
   load: async () => {
-    const { status, severity } = get().filters;
-    const res = await api.get("/alerts", { params: { status, severity } });
-    set({ alerts: res.data });
+    try {
+      const { status, severity } = get().filters;
+      const res = await api.get("/alerts", { params: { status, severity } });
+      set({ alerts: res.data });
+    } catch (error: any) {
+      // Silently handle 401/403 errors - user might not be authenticated yet
+      if (error?.message?.includes('Unauthorized') || error?.message?.includes('403')) {
+        set({ alerts: [] });
+        return;
+      }
+      // Re-throw other errors
+      throw error;
+    }
   },
   setFilters: (f) => set({ filters: { ...get().filters, ...f } }),
   ack: async (id) => {
-    await api.post(`/alerts/${id}/ack`);
-    await get().load();
+    try {
+      await api.post(`/alerts/${id}/ack`);
+      await get().load();
+    } catch (error: any) {
+      // Silently handle auth errors
+      if (error?.message?.includes('Unauthorized') || error?.message?.includes('403')) {
+        return;
+      }
+      throw error;
+    }
   },
   resolve: async (id) => {
-    await api.post(`/alerts/${id}/resolve`);
-    await get().load();
+    try {
+      await api.post(`/alerts/${id}/resolve`);
+      await get().load();
+    } catch (error: any) {
+      // Silently handle auth errors
+      if (error?.message?.includes('Unauthorized') || error?.message?.includes('403')) {
+        return;
+      }
+      throw error;
+    }
   },
 }));
 

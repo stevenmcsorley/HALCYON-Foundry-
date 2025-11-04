@@ -23,9 +23,7 @@ export async function gql<T>(query: string, variables?: Record<string, any>): Pr
 
   if (res.status === 401 && !isRedirecting) {
     isRedirecting = true
-    if (import.meta.env.VITE_DEV_MODE !== 'true' && import.meta.env.VITE_DEV_MODE !== '1') {
-      window.location.href = '/login'
-    }
+    window.location.href = '/login'
     throw new Error('Unauthorized')
   }
 
@@ -51,11 +49,24 @@ const baseUrl = gatewayUrl.includes('/graphql')
 
 export const api = {
   async get<T = any>(path: string, config?: { params?: Record<string, any> }): Promise<{ data: T }> {
+    // Don't make API calls if we're already redirecting
+    if (isRedirecting) {
+      throw new Error('Unauthorized')
+    }
+
     const token = auth.getToken()
-    const headers: Record<string, string> = {}
     
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
+    // If no token, redirect immediately without making the request
+    if (!token) {
+      if (!isRedirecting) {
+        isRedirecting = true
+        window.location.href = '/login'
+      }
+      throw new Error('Unauthorized')
+    }
+
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${token}`
     }
 
     let url = `${baseUrl}${path}`
@@ -72,12 +83,10 @@ export const api = {
     }
 
     const res = await fetch(url, { headers })
-    
+
     if (res.status === 401 && !isRedirecting) {
       isRedirecting = true
-      if (import.meta.env.VITE_DEV_MODE !== 'true' && import.meta.env.VITE_DEV_MODE !== '1') {
-        window.location.href = '/login'
-      }
+      window.location.href = '/login'
       throw new Error('Unauthorized')
     }
 
@@ -89,12 +98,26 @@ export const api = {
     return { data }
   },
 
-  async post<T = any>(path: string, body?: any): Promise<{ data: T }> {
+    async post<T = any>(path: string, body?: any): Promise<{ data: T }> {
+    // Don't make API calls if we're already redirecting
+    if (isRedirecting) {
+      throw new Error('Unauthorized')
+    }
+
     const token = auth.getToken()
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
+    // If no token, redirect immediately without making the request
+    if (!token) {
+      if (!isRedirecting) {
+        isRedirecting = true
+        window.location.href = '/login'
+      }
+      throw new Error('Unauthorized')
+    }
+
+    const headers: Record<string, string> = { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
     }
 
     const res = await fetch(`${baseUrl}${path}`, {
@@ -102,12 +125,10 @@ export const api = {
       headers,
       body: body ? JSON.stringify(body) : undefined,
     })
-    
+
     if (res.status === 401 && !isRedirecting) {
       isRedirecting = true
-      if (import.meta.env.VITE_DEV_MODE !== 'true' && import.meta.env.VITE_DEV_MODE !== '1') {
-        window.location.href = '/login'
-      }
+      window.location.href = '/login'
       throw new Error('Unauthorized')
     }
 

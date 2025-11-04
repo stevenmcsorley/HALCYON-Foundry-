@@ -14,20 +14,20 @@ import { useAuthStore } from './store/authStore'
 import * as auth from './services/auth'
 import { Toast, subscribeToToast } from './components/Toast'
 
-// Default to DEV_MODE=true for local development (bypass Keycloak)
-const DEV_MODE = import.meta.env.VITE_DEV_MODE === undefined || import.meta.env.VITE_DEV_MODE === 'true' || import.meta.env.VITE_DEV_MODE === '1'
-
 type Tab = 'console' | 'saved' | 'dashboards' | 'alerts'
 
 export default function App() {
-  const { user, initialize } = useAuthStore()
-  const isAuthenticated = user || DEV_MODE || auth.isAuthenticated()
+  const { user, initialize, loading } = useAuthStore()
   const [activeTab, setActiveTab] = useState<Tab>('console')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [authInitialized, setAuthInitialized] = useState(false)
 
   useEffect(() => {
     initialize()
+    setAuthInitialized(true)
   }, [initialize])
+
+  const isAuthenticated = authInitialized && (user || auth.isAuthenticated())
 
   useEffect(() => {
     const unsubscribe = subscribeToToast((message) => {
@@ -39,12 +39,20 @@ export default function App() {
 
   // Helper to check if user has a specific role
   const hasRole = (role: string): boolean => {
-    if (DEV_MODE) return true // DEV_MODE allows all roles
     if (!user) return false
     return user.roles.includes(role)
   }
 
-  if (!isAuthenticated && !DEV_MODE) {
+  // Show loading state while auth initializes - MUST be before authentication check
+  if (!authInitialized || loading) {
+    return (
+      <div className="min-h-screen bg-surface text-white flex items-center justify-center">
+        <div className="text-lg">Loading...</div>
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
     return <LoginForm />
   }
 
