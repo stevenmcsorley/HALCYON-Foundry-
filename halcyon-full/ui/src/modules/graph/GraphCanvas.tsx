@@ -15,20 +15,31 @@ export default function GraphCanvas({ elements }:{ elements:Elem }) {
     
     if (cyRef.current) {
       // Graph already exists, just resize it
-      setTimeout(() => cyRef.current?.resize(), 100)
+      setTimeout(() => {
+        if (cyRef.current && ref.current && ref.current.offsetWidth > 0 && ref.current.offsetHeight > 0) {
+          cyRef.current.resize()
+        }
+      }, 100)
       return
     }
     
-    // Wait a bit for container to have dimensions
+    // Wait for container to have dimensions before initializing
+    let retries = 0
+    const maxRetries = 20 // 20 * 50ms = 1 second max wait
+    
     const initGraph = () => {
       if (!ref.current || cyRef.current) return
       
       // Check if container has dimensions
       if (ref.current.offsetWidth === 0 || ref.current.offsetHeight === 0) {
-        setTimeout(initGraph, 50)
+        retries++
+        if (retries < maxRetries) {
+          setTimeout(initGraph, 50)
+        }
         return
       }
       
+      // Container is ready, initialize
       cyRef.current = cytoscape({ 
         container: ref.current,
         elements: [],
@@ -48,8 +59,8 @@ export default function GraphCanvas({ elements }:{ elements:Elem }) {
       })
     }
     
-    // Try immediate init, fallback to timeout
-    setTimeout(initGraph, 50)
+    // Start initialization
+    setTimeout(initGraph, 100)
   }, [setSel])
 
   useEffect(() => {
