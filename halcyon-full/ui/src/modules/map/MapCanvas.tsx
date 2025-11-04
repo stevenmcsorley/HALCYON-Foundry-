@@ -91,7 +91,7 @@ export default function MapCanvas({ locations }:{ locations:Loc[] }) {
       
       // If no marker exists, check if entity is in locations array
       const loc = locations.find(l => l.id === id)
-      if (loc) {
+      if (loc && typeof loc.lat === 'number' && typeof loc.lon === 'number') {
         map.current.flyTo({
           center: [loc.lon, loc.lat],
           zoom: 12,

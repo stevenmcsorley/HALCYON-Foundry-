@@ -130,5 +130,5 @@ export default function GraphCanvas({ elements }:{ elements:Elem }) {
     }
   }), [])
 
-  return <div ref={ref} className="w-full h-full rounded-lg bg-black/20" style={{ minHeight: '200px', position: 'relative' }} />
+  return <div ref={ref} className="w-full h-full rounded-lg bg-black/20" style={{ minHeight: 0, position: 'relative' }} />
 }
