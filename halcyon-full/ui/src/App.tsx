@@ -8,6 +8,8 @@ import LoginForm from './components/LoginForm'
 import UserMenu from './components/UserMenu'
 import SavedQueriesPanel from './modules/saved/SavedQueriesPanel'
 import DashboardEditor from './modules/dashboards/DashboardEditor'
+import AlertsTab from './modules/alerts/AlertsTab'
+import { NotificationBell } from './components/NotificationBell'
 import { useAuthStore } from './store/authStore'
 import * as auth from './services/auth'
 import { Toast, subscribeToToast } from './components/Toast'
@@ -15,7 +17,7 @@ import { Toast, subscribeToToast } from './components/Toast'
 // Default to DEV_MODE=true for local development (bypass Keycloak)
 const DEV_MODE = import.meta.env.VITE_DEV_MODE === undefined || import.meta.env.VITE_DEV_MODE === 'true' || import.meta.env.VITE_DEV_MODE === '1'
 
-type Tab = 'console' | 'saved' | 'dashboards'
+type Tab = 'console' | 'saved' | 'dashboards' | 'alerts'
 
 export default function App() {
   const { user, initialize } = useAuthStore()
@@ -53,7 +55,19 @@ export default function App() {
           <img src="/logo.png" alt="HALCYON Logo" className="h-8 w-8 object-contain" />
           <h1 className="text-xl font-semibold">HALCYON Console</h1>
         </div>
-        <UserMenu />
+        <div className="flex items-center gap-4">
+          <div
+            className="relative cursor-pointer"
+            onClick={() => {
+              // Clear unread by navigating to Alerts
+              setActiveTab('alerts');
+            }}
+            title="Open Alerts"
+          >
+            <NotificationBell />
+          </div>
+          <UserMenu />
+        </div>
       </header>
 
       <div className="border-b border-white/10 flex gap-2 px-4">
@@ -87,6 +101,18 @@ export default function App() {
         >
           Dashboards
         </button>
+        {(hasRole('analyst') || hasRole('admin')) && (
+          <button
+            className={`px-3 py-2 text-sm font-medium ${
+              activeTab === 'alerts'
+                ? 'border-b-2 border-white text-white'
+                : 'opacity-70 hover:opacity-100 text-white'
+            }`}
+            onClick={() => setActiveTab('alerts')}
+          >
+            Alerts
+          </button>
+        )}
       </div>
 
       {activeTab === 'console' && (
@@ -120,6 +146,12 @@ export default function App() {
       {activeTab === 'dashboards' && (
         <div className="h-[calc(100vh-8rem)] overflow-auto">
           <DashboardEditor />
+        </div>
+      )}
+
+      {activeTab === 'alerts' && (hasRole('analyst') || hasRole('admin')) && (
+        <div className="h-[calc(100vh-8rem)] overflow-auto">
+          <AlertsTab />
         </div>
       )}
       
