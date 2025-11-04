@@ -419,7 +419,7 @@ export default function DashboardEditor() {
                   )}
                 </div>
               )
-            }            )}
+            })}
           </div>
         </>
       )}
