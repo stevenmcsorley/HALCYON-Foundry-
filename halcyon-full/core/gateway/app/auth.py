@@ -83,11 +83,33 @@ async def verify_token(token: str) -> Optional[Dict]:
             return None
 
         discovery = await get_discovery_document()
-        issuer = discovery.get("issuer")
+        discovery_issuer = discovery.get("issuer")
         
-        # Decode token without verification first to check if it has an audience claim
+        # Decode token without verification first to check issuer and audience
         unverified_payload = jwt.get_unverified_claims(token)
+        token_issuer = unverified_payload.get("iss")
         has_audience = "aud" in unverified_payload
+        
+        # Keycloak may issue tokens with different issuer URLs (internal vs external)
+        # Accept both internal (keycloak:8080) and external (localhost:8089) variants
+        # Normalize by comparing the path portion which should be the same
+        def normalize_issuer(iss: str) -> str:
+            """Normalize issuer URL to compare only the path/realm portion."""
+            if not iss:
+                return ""
+            # Extract path after /realms/
+            if "/realms/" in iss:
+                return iss.split("/realms/", 1)[1]
+            return iss
+        
+        # Use the token's issuer for validation (it's what Keycloak actually issued)
+        # But we need to ensure it's from the same realm
+        if normalize_issuer(token_issuer) != normalize_issuer(discovery_issuer):
+            logger.warning(f"Issuer mismatch: token={token_issuer}, discovery={discovery_issuer}")
+            return None
+        
+        # Use token issuer for validation (it's the authoritative one)
+        issuer = token_issuer
         
         # For Keycloak, tokens can have audience as:
         # - UI client ID (halcyon-ui)
