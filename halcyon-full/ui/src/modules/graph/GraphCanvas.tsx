@@ -99,19 +99,15 @@ export default function GraphCanvas({ elements }:{ elements:Elem }) {
   useEffect(() => {
     if (!cyRef.current || !ref.current) return
     
-    let resizeTimeout: NodeJS.Timeout
+    let resizeTimeout: number
     const resizeObserver = new ResizeObserver(() => {
       if (cyRef.current && ref.current) {
         // Debounce resize operations
         clearTimeout(resizeTimeout)
-        resizeTimeout = setTimeout(() => {
+        resizeTimeout = window.setTimeout(() => {
           if (cyRef.current && ref.current && ref.current.offsetWidth > 0 && ref.current.offsetHeight > 0) {
             try {
               cyRef.current.resize()
-              // Only re-run layout if elements exist and graph is ready
-              if (cyRef.current.elements().length > 0) {
-                cyRef.current.layout({ name:'breadthfirst', animate:false }).run()
-              }
             } catch (e) {
               console.error('Graph resize error:', e)
             }
