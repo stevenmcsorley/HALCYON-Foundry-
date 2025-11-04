@@ -11,6 +11,8 @@ mapping:
     timestamp: "$.ts"
     source: "$.source"
     severity: "$.severity"
+    lat: "$.lat"
+    lon: "$.lon"
 
 # Optional: enrichment steps
 enrich:
