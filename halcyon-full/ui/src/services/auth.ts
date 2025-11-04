@@ -18,6 +18,7 @@ export interface User {
 }
 
 let discoveryCache: any = null
+let refreshPromise: Promise<{ token: string; user: User }> | null = null
 
 async function getDiscovery(): Promise<any> {
   if (discoveryCache) return discoveryCache
@@ -76,69 +77,91 @@ export async function login(username: string, password: string): Promise<{ token
     localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
   }
 
+  // Clear any pending refresh promise on successful login
+  refreshPromise = null
+
   return { token, user, refreshToken }
 }
 
 export async function refresh(): Promise<{ token: string; user: User }> {
-  if (DEV_MODE) {
-    // In dev mode, just return current token
-    const token = getToken()
-    const user = getUser()
-    if (!token || !user) throw new Error('No token to refresh in DEV_MODE')
-    return { token, user }
+  // If a refresh is already in progress, wait for it
+  if (refreshPromise) {
+    return refreshPromise
   }
 
-  const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
-  if (!refreshToken) {
-    throw new Error('No refresh token available')
-  }
+  // Start a new refresh
+  refreshPromise = (async () => {
+    try {
+      if (DEV_MODE) {
+        // In dev mode, just return current token
+        const token = getToken()
+        const user = getUser()
+        if (!token || !user) {
+          throw new Error('No token to refresh in DEV_MODE')
+        }
+        return { token, user }
+      }
 
-  const discovery = await getDiscovery()
-  const tokenUrl = discovery.token_endpoint
+      const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
+      if (!refreshToken) {
+        throw new Error('No refresh token available')
+      }
 
-  const params = new URLSearchParams({
-    grant_type: 'refresh_token',
-    client_id: KEYCLOAK_CLIENT_ID,
-    refresh_token: refreshToken,
-  })
+      const discovery = await getDiscovery()
+      const tokenUrl = discovery.token_endpoint
 
-  const res = await fetch(tokenUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params,
-  })
+      const params = new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: KEYCLOAK_CLIENT_ID,
+        refresh_token: refreshToken,
+      })
 
-  if (!res.ok) {
-    // Refresh failed, clear tokens and throw
-    logout()
-    throw new Error('Token refresh failed')
-  }
+      const res = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params,
+      })
 
-  const data = await res.json()
-  const token = data.access_token
-  const newRefreshToken = data.refresh_token
+      if (!res.ok) {
+        // Refresh failed, clear tokens and throw
+        logout()
+        throw new Error('Token refresh failed')
+      }
 
-  // Decode token to get user info
-  const payload = JSON.parse(atob(token.split('.')[1]))
-  const user: User = {
-    sub: payload.sub,
-    email: payload.email,
-    roles: payload.realm_access?.roles || payload.resource_access?.[KEYCLOAK_CLIENT_ID]?.roles || [],
-  }
+      const data = await res.json()
+      const token = data.access_token
+      const newRefreshToken = data.refresh_token
 
-  localStorage.setItem(TOKEN_KEY, token)
-  localStorage.setItem(USER_KEY, JSON.stringify(user))
-  if (newRefreshToken) {
-    localStorage.setItem(REFRESH_TOKEN_KEY, newRefreshToken)
-  }
+      // Decode token to get user info
+      const payload = JSON.parse(atob(token.split('.')[1]))
+      const user: User = {
+        sub: payload.sub,
+        email: payload.email,
+        roles: payload.realm_access?.roles || payload.resource_access?.[KEYCLOAK_CLIENT_ID]?.roles || [],
+      }
 
-  return { token, user }
+      localStorage.setItem(TOKEN_KEY, token)
+      localStorage.setItem(USER_KEY, JSON.stringify(user))
+      if (newRefreshToken) {
+        localStorage.setItem(REFRESH_TOKEN_KEY, newRefreshToken)
+      }
+
+      return { token, user }
+    } finally {
+      // Clear the refresh promise when done (success or failure)
+      refreshPromise = null
+    }
+  })()
+
+  return refreshPromise
 }
 
 export function logout(): void {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(REFRESH_TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
+  // Clear any pending refresh
+  refreshPromise = null
   window.location.href = '/'
 }
 
