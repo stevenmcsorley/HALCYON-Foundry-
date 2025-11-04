@@ -44,9 +44,17 @@ class AuthMiddleware(BaseHTTPMiddleware):
         token = auth_header.split(" ", 1)[1]
         
         try:
+            from jose import jwt as jose_jwt
             payload = await verify_token(token)
+        except jose_jwt.ExpiredSignatureError:
+            payload = None
+            failure_reason = "expired_token"
+        except jose_jwt.JWTClaimsError:
+            payload = None
+            failure_reason = "invalid_claims"
         except Exception:
             payload = None
+            failure_reason = "invalid_token"
 
         if not payload:
             if settings.dev_mode:
@@ -58,7 +66,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 }
                 auth_success_total.labels(method="dev_mode").inc()
                 return await call_next(request)
-            auth_failure_total.labels(reason="invalid_token").inc()
+            auth_failure_total.labels(reason=failure_reason).inc()
             response = JSONResponse(
                 status_code=401,
                 content={"detail": "Invalid or expired token"}

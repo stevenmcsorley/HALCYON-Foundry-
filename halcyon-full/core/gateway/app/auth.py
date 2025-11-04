@@ -141,10 +141,10 @@ async def verify_token(token: str) -> Optional[Dict]:
         return payload
     except jwt.ExpiredSignatureError:
         logger.warning("Token has expired")
-        return None
+        raise  # Re-raise so middleware can distinguish expired tokens
     except jwt.JWTClaimsError as e:
         logger.warning(f"JWT claims validation failed: {e}")
-        return None
+        raise  # Re-raise so middleware can distinguish claim errors
     except jwt.JWTError as e:
         logger.warning(f"JWT validation error: {e}")
         return None
