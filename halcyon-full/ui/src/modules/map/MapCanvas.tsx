@@ -1,91 +1,63 @@
 import React, { useEffect, useRef, useCallback } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import { onFocus } from '@/store/bus'
 import { useSelectionStore } from '@/store/selectionStore'
 
-type LocationEntity = {
-  id: string
-  lat: number
-  lon: number
-  name?: string
-}
+type Loc = { id:string; lat:number; lon:number; attrs:any }
 
-type MapCanvasProps = {
-  locations: LocationEntity[]
-  mapStyleUrl?: string
-}
-
-export const MapCanvas: React.FC<MapCanvasProps> = ({ locations, mapStyleUrl }) => {
-  const mapContainer = useRef<HTMLDivElement>(null)
-  const map = useRef<maplibregl.Map | null>(null)
-  const markersRef = useRef<maplibregl.Marker[]>([])
-  const { setSelectedEntity } = useSelectionStore()
+export default function MapCanvas({ locations }:{ locations:Loc[] }) {
+  const map = useRef<maplibregl.Map|null>(null)
+  const wrap = useRef<HTMLDivElement|null>(null)
+  const markers = useRef(new Map<string, maplibregl.Marker>())
+  const setSel = useSelectionStore(s=>s.set)
+  const styleUrl = import.meta.env.VITE_MAP_STYLE_URL ?? 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
 
   useEffect(() => {
-    if (!mapContainer.current || map.current) return
-
-    const defaultStyle = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
-    const styleUrl = mapStyleUrl || import.meta.env.VITE_MAP_STYLE_URL || defaultStyle
-
-    map.current = new maplibregl.Map({
-      container: mapContainer.current,
-      style: styleUrl,
-      center: [0, 0],
-      zoom: 2
-    })
-
+    if (map.current || !wrap.current) {
+      map.current?.resize(); return
+    }
+    map.current = new maplibregl.Map({ container: wrap.current, style: styleUrl, center: [-4.25, 55.86], zoom: 10 })
     map.current.addControl(new maplibregl.NavigationControl(), 'top-right')
+  }, [styleUrl])
 
-    return () => {
-      if (map.current) {
-        map.current.remove()
-        map.current = null
-      }
-    }
-  }, [mapStyleUrl])
-
-  // Debounced marker update function
-  const updateMarkers = useCallback(() => {
+  const renderMarkers = useCallback(() => {
     if (!map.current) return
-
-    // Clear existing markers
-    markersRef.current.forEach((marker) => marker.remove())
-    markersRef.current = []
-
-    // Add markers for each location
-    locations.forEach((location) => {
-      const el = document.createElement('div')
-      el.className = 'w-4 h-4 bg-accent rounded-full border-2 border-white cursor-pointer'
-      el.style.cursor = 'pointer'
-      el.title = location.name || location.id
-
-      const marker = new maplibregl.Marker({ element: el })
-        .setLngLat([location.lon, location.lat])
-        .addTo(map.current!)
-
-      el.addEventListener('click', () => {
-        setSelectedEntity({ id: location.id, type: 'Location' })
-      })
-
-      markersRef.current.push(marker)
+    const seen = new Set<string>()
+    locations.forEach(l => {
+      seen.add(l.id)
+      if (!markers.current.get(l.id)) {
+        const el = document.createElement('div'); el.className = 'w-3 h-3 rounded-full bg-teal-400 border border-white/50'
+        el.onclick = () => setSel({ id: l.id, type: 'Location' })
+        const m = new maplibregl.Marker({ element: el }).setLngLat([l.lon, l.lat]).addTo(map.current!)
+        markers.current.set(l.id, m)
+      } else {
+        markers.current.get(l.id)!.setLngLat([l.lon, l.lat])
+      }
     })
-
-    // Fit map to bounds if there are locations
-    if (locations.length > 0) {
-      const bounds = new maplibregl.LngLatBounds()
-      locations.forEach((loc) => bounds.extend([loc.lon, loc.lat]))
-      map.current.fitBounds(bounds, { padding: 50, maxZoom: 12 })
-    }
-  }, [locations, setSelectedEntity])
+    // cleanup
+    for (const [id, m] of markers.current) if (!seen.has(id)) { m.remove(); markers.current.delete(id) }
+  }, [locations, setSel])
 
   useEffect(() => {
-    // Debounce marker updates on stream updates (200ms delay)
-    const timeoutId = setTimeout(() => {
-      updateMarkers()
-    }, 200)
+    const t = setTimeout(renderMarkers, 150)
+    return () => clearTimeout(t)
+  }, [renderMarkers])
 
-    return () => clearTimeout(timeoutId)
-  }, [updateMarkers])
+  useEffect(() => {
+    const unsubscribe = onFocus(({ id }) => {
+      const m = markers.current.get(id)
+      if (m && map.current) {
+        const lngLat = m.getLngLat()
+        map.current.flyTo({
+          center: [lngLat.lng, lngLat.lat],
+          zoom: 12,
+          duration: 1500
+        })
+      }
+    })
+    return unsubscribe
+  }, [])
 
-  return <div ref={mapContainer} className="w-full h-full rounded-lg overflow-hidden" />
+  return <div ref={wrap} className="h-64 rounded-lg overflow-hidden" />
 }

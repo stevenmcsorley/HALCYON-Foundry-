@@ -3,7 +3,7 @@ import { MapPanel } from './modules/map'
 import { GraphPanel } from './modules/graph'
 import { ListPanel } from './modules/list'
 import { TimelinePanel } from './modules/timeline'
-import { EntityInspector } from './components/EntityInspector'
+import EntityInspector from './components/EntityInspector'
 
 export default function App() {
   return (

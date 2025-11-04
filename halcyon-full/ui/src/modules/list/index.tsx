@@ -5,11 +5,7 @@ import { useSelectionStore } from '@/store/selectionStore'
 
 export const ListPanel: React.FC = () => {
   const { entities, loading, error } = useEntities()
-  const { setSelectedEntity } = useSelectionStore()
-
-  const handleEntityClick = (entity: { id: string; type: string }) => {
-    setSelectedEntity({ id: entity.id, type: entity.type })
-  }
+  const setSel = useSelectionStore(s => s.set)
 
   return (
     <Card title="Entities">
@@ -21,10 +17,10 @@ export const ListPanel: React.FC = () => {
             <li className="opacity-70">No entities found. Run the seed script to add sample data.</li>
           ) : (
             entities.map((entity) => (
-              <li
-                key={entity.id}
-                className="p-2 rounded bg-black/20 hover:bg-black/30 cursor-pointer transition-colors"
-                onClick={() => handleEntityClick(entity)}
+              <li 
+                key={entity.id} 
+                className="p-2 rounded bg-black/20 cursor-pointer hover:bg-black/40 transition-colors"
+                onClick={() => setSel({ id: entity.id, type: entity.type })}
               >
                 <div className="font-medium">{entity.type}: {entity.id}</div>
                 <div className="text-xs text-muted mt-1">

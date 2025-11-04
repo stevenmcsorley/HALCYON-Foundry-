@@ -1,105 +1,43 @@
 import React, { useEffect, useRef } from 'react'
-import cytoscape, { Core, ElementsDefinition } from 'cytoscape'
+import cytoscape, { Core } from 'cytoscape'
+import { onFocus } from '@/store/bus'
 import { useSelectionStore } from '@/store/selectionStore'
 
-type GraphCanvasProps = {
-  elements: ElementsDefinition
-}
+type Elem = { nodes:any[]; edges:any[] }
 
-export const GraphCanvas: React.FC<GraphCanvasProps> = ({ elements }) => {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const cyRef = useRef<Core | null>(null)
-  const { setSelectedEntity } = useSelectionStore()
+export default function GraphCanvas({ elements }:{ elements:Elem }) {
+  const ref = useRef<HTMLDivElement|null>(null)
+  const cyRef = useRef<Core|null>(null)
+  const setSel = useSelectionStore(s=>s.set)
 
   useEffect(() => {
-    if (!containerRef.current || cyRef.current) return
-
-    cyRef.current = cytoscape({
-      container: containerRef.current,
-      elements,
-      style: [
-        {
-          selector: 'node',
-          style: {
-            'label': 'data(label)',
-            'width': 40,
-            'height': 40,
-            'background-color': '#0ea5a5',
-            'color': '#ffffff',
-            'font-size': '10px',
-            'text-valign': 'center',
-            'text-halign': 'center',
-            'text-wrap': 'wrap',
-            'text-max-width': '60px',
-            'border-width': 2,
-            'border-color': '#ffffff',
-            'shape': 'ellipse'
-          }
-        },
-        {
-          selector: 'node[type = "Location"]',
-          style: {
-            'background-color': '#8b5cf6'
-          }
-        },
-        {
-          selector: 'node[type = "Event"]',
-          style: {
-            'background-color': '#ef4444'
-          }
-        },
-        {
-          selector: 'node[type = "Asset"]',
-          style: {
-            'background-color': '#10b981'
-          }
-        },
-        {
-          selector: 'edge',
-          style: {
-            'width': 2,
-            'line-color': '#a2a8b0',
-            'target-arrow-color': '#a2a8b0',
-            'target-arrow-shape': 'triangle',
-            'curve-style': 'bezier',
-            'label': 'data(label)',
-            'font-size': '8px',
-            'color': '#a2a8b0',
-            'text-rotation': 'autorotate',
-            'text-margin-y': -10
-          }
-        }
-      ],
-      layout: {
-        name: 'breadthfirst',
-        animate: true,
-        animationDuration: 1000,
-        fit: true,
-        padding: 30
-      }
+    if (cyRef.current || !ref.current) return
+    cyRef.current = cytoscape({ container: ref.current, style: [
+      { selector: 'node', style: { 'background-color':'#22d3ee', 'label':'data(label)', 'color':'#cbd5e1', 'font-size':12 } },
+      { selector: 'edge', style: { 'line-color':'#64748b', 'target-arrow-color':'#64748b', 'target-arrow-shape':'triangle', 'curve-style':'bezier', 'label':'data(label)', 'font-size':10, 'text-rotation':'autorotate' } },
+      { selector: '.selected', style: { 'border-width': 4, 'border-color':'#fff' } }
+    ]})
+    cyRef.current.on('tap', 'node', (ev) => {
+      const id = ev.target.id(); const type = ev.target.data('type')
+      setSel({ id, type })
+      cyRef.current!.elements().removeClass('selected'); ev.target.addClass('selected')
     })
-
-    // Handle node click
-    cyRef.current.on('tap', 'node', (evt) => {
-      const node = evt.target
-      const data = node.data()
-      setSelectedEntity({ id: data.id, type: data.type })
-    })
-
-    return () => {
-      if (cyRef.current) {
-        cyRef.current.destroy()
-        cyRef.current = null
-      }
-    }
-  }, [setSelectedEntity])
+  }, [setSel])
 
   useEffect(() => {
     if (!cyRef.current) return
     cyRef.current.elements().remove()
-    cyRef.current.add(elements)
-    cyRef.current.layout({ name: 'breadthfirst', animate: true, animationDuration: 500 }).run()
+    cyRef.current.add([...elements.nodes, ...elements.edges])
+    cyRef.current.layout({ name:'breadthfirst', animate:true, animationDuration:300 }).run()
   }, [elements])
 
-  return <div ref={containerRef} className="w-full h-full rounded-lg" style={{ minHeight: '300px' }} />
+  useEffect(() => onFocus(({ id }) => {
+    const n = cyRef.current?.getElementById(id)
+    if (n && n.nonempty()) {
+      cyRef.current!.elements().removeClass('selected'); n.addClass('selected')
+      cyRef.current!.animate({ fit: { eles: n, padding: 50 }, duration: 250 })
+    }
+  }), [])
+
+  return <div ref={ref} className="h-72 rounded-lg bg-black/20" />
 }

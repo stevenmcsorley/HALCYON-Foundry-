@@ -1,18 +1,11 @@
 import { create } from 'zustand'
 
-type SelectedEntity = {
-  id: string
-  type: string
-} | null
+type Sel = { id?: string; type?: string }
 
-type SelectionStore = {
-  selectedEntity: SelectedEntity
-  setSelectedEntity: (entity: SelectedEntity) => void
-  clearSelection: () => void
-}
+type S = Sel & { set: (s: Sel) => void; clear: () => void }
 
-export const useSelectionStore = create<SelectionStore>((set) => ({
-  selectedEntity: null,
-  setSelectedEntity: (entity) => set({ selectedEntity: entity }),
-  clearSelection: () => set({ selectedEntity: null })
+export const useSelectionStore = create<S>((set) => ({
+  id: undefined, type: undefined,
+  set: (s) => set(s),
+  clear: () => set({ id: undefined, type: undefined })
 }))

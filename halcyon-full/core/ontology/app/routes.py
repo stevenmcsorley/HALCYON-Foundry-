@@ -52,11 +52,39 @@ async def get_entity(entity_id: str, graph: GraphStore = Depends(get_graph)):
 
 
 @router.get("/relationships")
-async def get_relationships(
-    type: str | None = None,
-    fromId: str | None = None,
-    toId: str | None = None,
+async def get_relationships(graph: GraphStore = Depends(get_graph)):
+    relationships = await graph.get_relationships()
+    return relationships
+
+
+@router.get("/events/counts")
+async def event_counts(
+    bucket: str = "hour",
+    limit: int = 60,
     graph: GraphStore = Depends(get_graph)
 ):
-    relationships = await graph.get_relationships(type, fromId, toId)
-    return relationships
+    """
+    Aggregate Event entities by timestamp bucket.
+    Expects Event.attrs.timestamp as ISO string.
+    Returns list of {ts: str, c: int} sorted by timestamp ascending.
+    """
+    # Simple time bucket truncation without APOC
+    # Format: minute -> truncate to minute, hour -> truncate to hour, day -> truncate to day
+    bucket_map = {"minute": 16, "hour": 13, "day": 10}  # ISO string truncation positions
+    trunc_len = bucket_map.get(bucket, 13)
+    
+    cypher = """
+    MATCH (e:Event)
+    WHERE e.timestamp IS NOT NULL
+    WITH substring(e.timestamp, 0, $truncLen) AS bucket
+    RETURN bucket AS ts, count(*) AS c
+    ORDER BY ts DESC
+    LIMIT $limit
+    """
+    
+    async with graph._driver.session() as session:
+        result = await session.run(cypher, truncLen=trunc_len, limit=limit)
+        rows = [dict(record) for record in await result.data()]
+    
+    # Reverse to get ascending order (oldest first)
+    return list(reversed(rows))

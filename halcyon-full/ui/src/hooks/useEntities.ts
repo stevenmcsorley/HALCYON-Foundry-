@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { gql } from '@/services/api'
-import { useEntityStream } from './useEntityStream'
+import { subscribe } from '@/services/websocket'
 
 type Entity = {
   id: string
@@ -12,6 +12,7 @@ export function useEntities(type?: string) {
   const [entities, setEntities] = useState<Entity[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const entitiesRef = useRef<Map<string, Entity>>(new Map())
 
   useEffect(() => {
     const fetchEntities = async () => {
@@ -22,6 +23,7 @@ export function useEntities(type?: string) {
           ? `query { entities(type: "${type}") { id type attrs } }`
           : `query { entities { id type attrs } }`
         const data = await gql<{ entities: Entity[] }>(Q)
+        entitiesRef.current = new Map(data.entities.map(e => [e.id, e]))
         setEntities(data.entities)
       } catch (e: any) {
         setError(e.message)
@@ -30,22 +32,18 @@ export function useEntities(type?: string) {
       }
     }
     fetchEntities()
-  }, [type])
 
-  // Subscribe to real-time updates
-  useEntityStream({
-    onEntityUpserted: (entity) => {
-      setEntities((prev) => {
-        const existingIndex = prev.findIndex((e) => e.id === entity.id)
-        if (existingIndex >= 0) {
-          const updated = [...prev]
-          updated[existingIndex] = entity
-          return updated
-        }
-        return [...prev, entity]
-      })
-    }
-  })
+    const unsubscribe = subscribe((msg) => {
+      if (msg.t === 'entity.upsert' && msg.data) {
+        const entity = msg.data as Entity
+        entitiesRef.current.set(entity.id, entity)
+        const filtered = type ? Array.from(entitiesRef.current.values()).filter(e => e.type === type) : Array.from(entitiesRef.current.values())
+        setEntities(filtered)
+      }
+    })
+
+    return unsubscribe
+  }, [type])
 
   return { entities, loading, error }
 }

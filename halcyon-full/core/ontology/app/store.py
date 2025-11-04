@@ -113,67 +113,27 @@ class GraphStore:
 
     async def get_entity(self, entity_id: str) -> dict | None:
         async with self._driver.session() as session:
-            # Use WHERE clause instead of property match for better compatibility
-            result = await session.run("""
-                MATCH (n)
-                WHERE n.id = $id
-                RETURN n.id as id, labels(n)[0] as type, properties(n) as attrs
-            """, id=entity_id)
+            result = await session.run(
+                "MATCH (n) WHERE n.id = $id RETURN n.id as id, labels(n)[0] as type, properties(n) as attrs",
+                id=entity_id
+            )
             record = await result.single()
             if not record:
                 return None
             attrs = dict(record["attrs"])
-            attrs.pop("id", None)
-            
-            # Get neighbors (connected entities) - lightweight IDs+types only
-            neighbors_result = await session.run("""
-                MATCH (n)-[r]-(other)
-                WHERE n.id = $id
-                RETURN DISTINCT other.id as id, labels(other)[0] as type, 
-                       type(r) as relType, 
-                       startNode(r).id = $id as isOutgoing
-            """, id=entity_id)
-            neighbors = []
-            async for neighbor_record in neighbors_result:
-                neighbors.append({
-                    "id": neighbor_record["id"],
-                    "type": neighbor_record["type"],
-                    "relType": neighbor_record["relType"],
-                    "isOutgoing": neighbor_record["isOutgoing"]
-                })
-            
-            # Response shape: { id, type, attrs } with optional neighbors
+            attrs.pop("id", None)  # Remove id from attrs since we have it separately
             return {
                 "id": record["id"],
                 "type": record["type"],
-                "attrs": attrs,
-                "neighbors": neighbors
+                "attrs": attrs
             }
 
-    async def get_relationships(self, rel_type: str | None = None, from_id: str | None = None, to_id: str | None = None) -> list[dict]:
+    async def get_relationships(self) -> list[dict]:
         async with self._driver.session() as session:
-            query = "MATCH (a)-[r]->(b)"
-            conditions = []
-            params = {}
-            
-            if rel_type:
-                rel_type_escaped = rel_type.replace('`', '``')
-                query = f"MATCH (a)-[r:`{rel_type_escaped}`]->(b)"
-            
-            if from_id:
-                conditions.append("a.id = $from_id")
-                params["from_id"] = from_id
-            
-            if to_id:
-                conditions.append("b.id = $to_id")
-                params["to_id"] = to_id
-            
-            if conditions:
-                query += " WHERE " + " AND ".join(conditions)
-            
-            query += " RETURN type(r) as type, a.id as fromId, b.id as toId, properties(r) as attrs"
-            
-            result = await session.run(query, **params)
+            result = await session.run("""
+                MATCH (a)-[r]->(b)
+                RETURN type(r) as type, a.id as fromId, b.id as toId, properties(r) as attrs
+            """)
             relationships = []
             async for record in result:
                 relationships.append({

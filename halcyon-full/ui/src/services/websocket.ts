@@ -1,81 +1,18 @@
-type WebSocketMessage = {
-  t: 'entity.upsert' | 'relationship.upsert' | 'pong'
-  data?: any
+type Msg = { t:'entity.upsert'|'relationship.upsert'|'pong'; data?:any } & Record<string,any>
+
+const WS_URL = import.meta.env.VITE_GATEWAY_WS_URL
+  || (import.meta.env.VITE_GATEWAY_URL ?? 'http://localhost:8088/graphql')
+       .replace(/^http/,'ws').replace(/\/graphql\/?$/,'') + '/ws'
+
+export function subscribe(onMessage:(m:Msg)=>void) {
+  let ws:WebSocket|null = null, stopped=false, backoff=500
+  const connect = () => {
+    if (stopped) return
+    try { ws = new WebSocket(WS_URL) } catch { schedule(); return }
+    ws.onmessage = (e)=>{ try{ onMessage(JSON.parse(e.data)) }catch{} }
+    ws.onclose = schedule; ws.onerror = schedule
+  }
+  const schedule = () => { if (stopped) return; setTimeout(connect, backoff); backoff=Math.min(backoff*2, 5000) }
+  connect()
+  return ()=>{ stopped=true; try{ ws?.close() }catch{} }
 }
-
-type WebSocketCallback = (message: WebSocketMessage) => void
-
-class WebSocketClient {
-  private ws: WebSocket | null = null
-  private url: string
-  private callbacks: Set<WebSocketCallback> = new Set()
-  private reconnectAttempts = 0
-  private maxReconnectAttempts = 5
-  private reconnectDelay = 1000
-  private shouldReconnect = true
-
-  constructor() {
-    const gatewayUrl = import.meta.env.VITE_GATEWAY_URL ?? 'http://localhost:8088/graphql'
-    const wsUrl = gatewayUrl.replace(/^http/, 'ws').replace('/graphql', '/ws')
-    this.url = wsUrl
-  }
-
-  connect(): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      return
-    }
-
-    try {
-      this.ws = new WebSocket(this.url)
-
-      this.ws.onopen = () => {
-        this.reconnectAttempts = 0
-        console.log('WebSocket connected')
-      }
-
-      this.ws.onmessage = (event) => {
-        try {
-          const message: WebSocketMessage = JSON.parse(event.data)
-          this.callbacks.forEach((callback) => callback(message))
-        } catch (error) {
-          console.error('Error parsing WebSocket message:', error)
-        }
-      }
-
-      this.ws.onerror = (error) => {
-        console.error('WebSocket error:', error)
-      }
-
-      this.ws.onclose = () => {
-        console.log('WebSocket closed')
-        if (this.shouldReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
-          this.reconnectAttempts++
-          setTimeout(() => this.connect(), this.reconnectDelay * this.reconnectAttempts)
-        }
-      }
-    } catch (error) {
-      console.error('Error creating WebSocket:', error)
-    }
-  }
-
-  disconnect(): void {
-    this.shouldReconnect = false
-    if (this.ws) {
-      this.ws.close()
-      this.ws = null
-    }
-    this.callbacks.clear()
-  }
-
-  subscribe(callback: WebSocketCallback): () => void {
-    this.callbacks.add(callback)
-    if (this.ws?.readyState !== WebSocket.OPEN) {
-      this.connect()
-    }
-    return () => {
-      this.callbacks.delete(callback)
-    }
-  }
-}
-
-export const wsClient = new WebSocketClient()

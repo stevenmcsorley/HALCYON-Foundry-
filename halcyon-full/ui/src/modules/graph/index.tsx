@@ -1,24 +1,39 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { Card } from '@/components/Card'
-import { GraphCanvas } from './GraphCanvas'
-import { useGraphData } from './useGraphData'
+import GraphCanvas from './GraphCanvas'
+import { useRelationships } from '@/hooks/useRelationships'
+import { useEntities } from '@/hooks/useEntities'
 
 export const GraphPanel: React.FC = () => {
-  const { graphData, loading, error } = useGraphData()
+  const { relationships, loading: relLoading, error: relError } = useRelationships()
+  const { entities, loading: entLoading } = useEntities()
+
+  const elements = useMemo(() => {
+    const nodes = entities.map((e) => ({
+      data: {
+        id: e.id,
+        label: e.type === 'Location' && e.attrs.name ? e.attrs.name : e.id,
+        type: e.type
+      }
+    }))
+
+    const edges = relationships.map((rel, idx) => ({
+      data: {
+        id: `edge-${idx}`,
+        source: rel.fromId,
+        target: rel.toId,
+        label: rel.type
+      }
+    }))
+
+    return { nodes, edges }
+  }, [entities, relationships])
 
   return (
     <Card title="Graph">
-      {loading && <div className="text-sm text-muted mb-2">Loading...</div>}
-      {error && <div className="text-sm text-red-400 mb-2">Error: {error}</div>}
-      <div className="h-48">
-        {graphData.nodes.length === 0 && !loading ? (
-          <div className="h-full rounded-lg bg-black/20 flex items-center justify-center text-muted text-sm">
-            No graph data available
-          </div>
-        ) : (
-          <GraphCanvas elements={graphData} />
-        )}
-      </div>
+      {(relLoading || entLoading) && <div className="text-sm text-muted mb-2">Loading...</div>}
+      {relError && <div className="text-sm text-red-400 mb-2">Error: {relError}</div>}
+      <GraphCanvas elements={elements} />
     </Card>
   )
 }
