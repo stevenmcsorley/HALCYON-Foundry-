@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from typing import List
+import os
 
 class Settings(BaseSettings):
     app_host: str = "0.0.0.0"
@@ -7,6 +8,7 @@ class Settings(BaseSettings):
     ontology_base_url: str
     policy_base_url: str
     registry_base_url: str = "http://registry:8090"
+    pg_dsn: str = os.getenv("PG_DSN", "postgresql://postgres:dev@postgres:5432/halcyon")
     service_name: str = "halcyon-gateway"
     default_roles: List[str] = ["analyst"]
     keycloak_url: str = "http://localhost:8089"

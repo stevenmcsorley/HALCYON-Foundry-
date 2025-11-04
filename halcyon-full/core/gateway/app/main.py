@@ -7,9 +7,12 @@ from .config import settings
 from .clients import OntologyClient, PolicyClient
 from .resolvers import query, mutation
 from .resolvers_fed import fed_query
+from .resolvers_saved import saved_query as saved_query_resolver, saved_mutation
 from .ws_pubsub import register_ws
 from .health import router as health_router
 from .routes_federation import router as federation_router
+from .routes_saved import router as saved_queries_router, dashboard_router
+from .db import init_db, close_pool
 from .logging import setup_logging
 from .tracing import setup_tracing
 from .middleware import AuthMiddleware
@@ -17,7 +20,11 @@ from .middleware import AuthMiddleware
 setup_logging()
 
 type_defs = load_schema_from_path("app/schema.graphql")
-schema = make_executable_schema(type_defs, [query, fed_query], mutation)
+schema = make_executable_schema(
+    type_defs,
+    [query, fed_query, saved_query_resolver],
+    [mutation, saved_mutation]
+)
 
 app = FastAPI(title="HALCYON Gateway", version="0.1.0")
 
@@ -82,10 +89,19 @@ graphql_app = GraphQL(schema, context_value=get_context)
 register_ws(app)
 app.include_router(health_router)
 app.include_router(federation_router)
+app.include_router(saved_queries_router)
+app.include_router(dashboard_router)
+
+@app.on_event("startup")
+async def startup():
+    """Initialize database on startup."""
+    await init_db()
 
 @app.on_event("shutdown")
 async def shutdown():
-    await ontology_client.close(); await policy_client.close()
+    await ontology_client.close()
+    await policy_client.close()
+    await close_pool()
 
 app.mount("/graphql", graphql_app)
 

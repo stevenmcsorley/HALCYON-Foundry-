@@ -4,11 +4,24 @@ type Query {
   entityById(id: ID!): Entity
   relationships: [Relationship!]!
   federatedEntities(source: String!, type: String, limit: Int = 200): [Entity!]!
+  savedQueries: [SavedQuery!]!
+  savedQuery(id: ID!): SavedQuery
+  dashboards: [Dashboard!]!
+  dashboard(id: ID!): DashboardWithPanels
 }
 
 type Mutation {
   upsertEntities(input: [EntityInput!]!): Boolean!
   upsertRelationships(input: [RelationshipInput!]!): Boolean!
+  createSavedQuery(input: SavedQueryInput!): SavedQuery!
+  updateSavedQuery(id: ID!, input: SavedQueryUpdateInput!): SavedQuery!
+  deleteSavedQuery(id: ID!): Boolean!
+  createDashboard(input: DashboardInput!): Dashboard!
+  updateDashboard(id: ID!, input: DashboardUpdateInput!): Dashboard!
+  deleteDashboard(id: ID!): Boolean!
+  createPanel(dashboardId: ID!, input: PanelInput!): Panel!
+  updatePanel(dashboardId: ID!, panelId: ID!, input: PanelUpdateInput!): Panel!
+  deletePanel(dashboardId: ID!, panelId: ID!): Boolean!
 }
 
 type Entity {
@@ -38,3 +51,72 @@ input RelationshipInput {
 }
 
 scalar JSON
+
+type SavedQuery {
+  id: ID!
+  name: String!
+  owner: String!
+  gql: String!
+  createdAt: String!
+  updatedAt: String!
+}
+
+input SavedQueryInput {
+  name: String!
+  gql: String!
+}
+
+input SavedQueryUpdateInput {
+  name: String
+  gql: String
+}
+
+type Dashboard {
+  id: ID!
+  name: String!
+  owner: String!
+  createdAt: String!
+  updatedAt: String!
+}
+
+type DashboardWithPanels {
+  id: ID!
+  name: String!
+  owner: String!
+  createdAt: String!
+  updatedAt: String!
+  panels: [Panel!]!
+}
+
+input DashboardInput {
+  name: String!
+}
+
+input DashboardUpdateInput {
+  name: String
+}
+
+type Panel {
+  id: ID!
+  dashboardId: ID!
+  title: String!
+  type: String!
+  config: JSON!
+  position: Int!
+  createdAt: String!
+  updatedAt: String!
+}
+
+input PanelInput {
+  title: String!
+  type: String!
+  config: JSON
+  position: Int
+}
+
+input PanelUpdateInput {
+  title: String
+  type: String
+  config: JSON
+  position: Int
+}
