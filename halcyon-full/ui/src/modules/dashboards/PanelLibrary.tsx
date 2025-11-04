@@ -7,11 +7,14 @@ const items: { type: PanelType; title: string; desc: string }[] = [
   { type: 'list', title: 'List', desc: 'Tabular entity listing' },
   { type: 'timeline', title: 'Timeline', desc: 'Time buckets & playback' },
   { type: 'metric', title: 'Metric', desc: 'Single numeric KPI' },
+  { type: 'table', title: 'Table', desc: 'Sortable table view' },
+  { type: 'topbar', title: 'Top-N Bars', desc: 'Categorical metrics' },
+  { type: 'geoheat', title: 'Geo Heat', desc: 'Spatial density map' },
 ]
 
 export default function PanelLibrary({ onPick }: { onPick: (t: PanelType) => void }) {
   return (
-    <div className="grid grid-cols-5 gap-2">
+    <div className="grid grid-cols-4 gap-2">
       {items.map((i) => (
         <button
           key={i.type}

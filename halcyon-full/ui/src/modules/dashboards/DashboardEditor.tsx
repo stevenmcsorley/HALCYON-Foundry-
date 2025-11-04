@@ -379,7 +379,7 @@ export default function DashboardEditor() {
                   </div>
 
                   {query ? (
-                    <PanelRenderer type={p.type} query={query} refreshSec={p.refreshSec} />
+                    <PanelRenderer type={p.type} query={query} refreshSec={p.refreshSec} config={p.config} />
                   ) : (
                     <div className="opacity-70 text-sm text-white mt-2">Assign a query to render panel</div>
                   )}

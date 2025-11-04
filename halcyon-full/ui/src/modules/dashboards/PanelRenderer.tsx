@@ -4,10 +4,13 @@ import { MapPanel } from '@/modules/map'
 import GraphCanvas from '@/modules/graph/GraphCanvas'
 import { ListPanel } from '@/modules/list'
 import { TimelinePanel } from '@/modules/timeline'
+import { TablePanel } from './panels/TablePanel'
+import { TopBarPanel } from './panels/TopBarPanel'
+import { GeoHeatPanel } from './panels/GeoHeatPanel'
 import { gql } from '@/services/api'
 import { Card } from '@/components/Card'
 
-export default function PanelRenderer({ type, query, refreshSec = 30 }: { type: PanelType; query: SavedQuery; refreshSec?: number }) {
+export default function PanelRenderer({ type, query, refreshSec = 30, config }: { type: PanelType; query: SavedQuery; refreshSec?: number; config?: Record<string, unknown> }) {
   const [data, setData] = React.useState<any>(null)
   const [error, setError] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(true)
@@ -143,6 +146,18 @@ export default function PanelRenderer({ type, query, refreshSec = 30 }: { type: 
 
   if (type === 'timeline') return <TimelinePanel />
   if (type === 'map') return <MapPanel />
+
+  if (type === 'table') {
+    return <TablePanel data={data} config={config as any} />
+  }
+
+  if (type === 'topbar') {
+    return <TopBarPanel data={data} config={config as any} />
+  }
+
+  if (type === 'geoheat') {
+    return <GeoHeatPanel data={data} config={config as any} />
+  }
 
   return <div className="text-white opacity-70">Unknown panel type: {type}</div>
 }
