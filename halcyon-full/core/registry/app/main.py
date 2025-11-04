@@ -117,11 +117,21 @@ async def start_connector(connector: Any) -> None:
         if isinstance(connector, WebhookConnector):
             connector_id = connector.connector_id
             
-            @webhook_router.post(f"/{connector_id}")
+            # Capture connector in closure to avoid issues
+            captured_connector = connector
+            
             async def webhook_handler(request: Request):
                 payload = await request.json()
-                await connector.handle_webhook(payload)
+                await captured_connector.handle_webhook(payload)
                 return JSONResponse({"status": "ok"})
+            
+            # Use app.add_api_route to register dynamically
+            app.add_api_route(
+                f"/webhooks/{connector_id}",
+                webhook_handler,
+                methods=["POST"],
+                response_class=JSONResponse
+            )
             
             logger.info(f"Registered webhook route: /webhooks/{connector_id}")
     except Exception as e:
