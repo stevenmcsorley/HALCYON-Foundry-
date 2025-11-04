@@ -10,6 +10,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
     """Middleware to extract and verify JWT tokens."""
 
     async def dispatch(self, request: Request, call_next: Callable):
+        # Skip auth for OPTIONS requests (CORS preflight)
+        if request.method == "OPTIONS":
+            return await call_next(request)
+        
         # Skip auth for health endpoints and /auth/user (will handle separately)
         if request.url.path in ["/health", "/health/ready", "/metrics", "/auth/user"]:
             return await call_next(request)
