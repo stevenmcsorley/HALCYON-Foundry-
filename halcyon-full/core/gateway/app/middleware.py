@@ -1,4 +1,5 @@
 from fastapi import Request, HTTPException
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from typing import Callable
 from .auth import verify_token, extract_roles
@@ -24,10 +25,17 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     "roles": settings.default_roles,
                 }
                 return await call_next(request)
-            raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Missing or invalid Authorization header"}
+            )
 
         token = auth_header.split(" ", 1)[1]
-        payload = await verify_token(token)
+        
+        try:
+            payload = await verify_token(token)
+        except Exception:
+            payload = None
 
         if not payload:
             if settings.dev_mode:
@@ -38,7 +46,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     "roles": settings.default_roles,
                 }
                 return await call_next(request)
-            raise HTTPException(status_code=401, detail="Invalid or expired token")
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Invalid or expired token"}
+            )
 
         # Extract user info
         roles = extract_roles(payload)

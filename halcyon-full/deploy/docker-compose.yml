@@ -41,7 +41,7 @@ services:
       ONTOLOGY_BASE_URL: http://ontology:8081
       POLICY_BASE_URL: http://opa:8181/v1/data/halcyon/allow
       REDIS_URL: redis://redis:6379/0
-      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8089}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-halcyon-dev}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-halcyon-gateway}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-RS256}
