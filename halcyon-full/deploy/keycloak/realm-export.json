@@ -50,10 +50,16 @@
       "credentials": [
         {
           "type": "password",
-          "value": "admin"
+          "value": "admin",
+          "temporary": false
         }
       ],
-      "realmRoles": ["admin"]
+      "realmRoles": [
+        "admin"
+      ],
+      "email": "admin@halcyon.dev",
+      "emailVerified": true,
+      "firstName": "Admin"
     },
     {
       "username": "analyst",
@@ -61,10 +67,16 @@
       "credentials": [
         {
           "type": "password",
-          "value": "analyst"
+          "value": "analyst",
+          "temporary": false
         }
       ],
-      "realmRoles": ["analyst"]
+      "realmRoles": [
+        "analyst"
+      ],
+      "email": "analyst@halcyon.dev",
+      "emailVerified": true,
+      "firstName": "Analyst"
     }
   ]
 }
