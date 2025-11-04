@@ -1,28 +1,33 @@
 import React from 'react'
 import type { PanelType, SavedQuery } from '@/store/savedStore'
 import { MapPanel } from '@/modules/map'
-import { GraphPanel } from '@/modules/graph'
+import GraphCanvas from '@/modules/graph/GraphCanvas'
 import { ListPanel } from '@/modules/list'
 import { TimelinePanel } from '@/modules/timeline'
 import { gql } from '@/services/api'
+import { Card } from '@/components/Card'
 
 export default function PanelRenderer({ type, query }: { type: PanelType; query: SavedQuery }) {
   const [data, setData] = React.useState<any>(null)
   const [error, setError] = React.useState<string | null>(null)
+  const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
     let cancelled = false
+    setLoading(true)
     ;(async () => {
       try {
         const result = await gql<any>(query.gql, {})
         if (!cancelled) {
           setData(result)
           setError(null)
+          setLoading(false)
         }
       } catch (e: any) {
         if (!cancelled) {
           setError(e.message)
           setData(null)
+          setLoading(false)
         }
       }
     })()
@@ -31,8 +36,12 @@ export default function PanelRenderer({ type, query }: { type: PanelType; query:
     }
   }, [query.gql])
 
+  if (loading) {
+    return <div className="text-sm text-muted p-4">Loading...</div>
+  }
+
   if (error) {
-    return <div className="text-red-400 text-sm">Error: {error}</div>
+    return <div className="text-red-400 text-sm p-4">Error: {error}</div>
   }
 
   if (type === 'metric') {
@@ -52,9 +61,45 @@ export default function PanelRenderer({ type, query }: { type: PanelType; query:
     )
   }
 
+  if (type === 'graph') {
+    // Transform query result to graph format
+    const entities = data?.entities || []
+    const relationships = data?.relationships || []
+    
+    // Extract from nested structure if needed
+    const allEntities = entities.length > 0 ? entities : (data?.data?.entities || Object.values(data || {}).flat().filter((v: any) => v && typeof v === 'object' && v.id && v.type))
+    const allRelationships = relationships.length > 0 ? relationships : (data?.data?.relationships || [])
+
+    const nodes = allEntities.map((e: any) => ({
+      data: {
+        id: e.id,
+        label: e.type === 'Location' && e.attrs?.name ? e.attrs.name : e.id,
+        type: e.type
+      }
+    }))
+
+    // Only include edges where both source and target nodes exist
+    const nodeIds = new Set(nodes.map(n => n.data.id))
+    const edges = allRelationships
+      .filter((rel: any) => nodeIds.has(rel.fromId) && nodeIds.has(rel.toId))
+      .map((rel: any, idx: number) => ({
+        data: {
+          id: `edge-${idx}`,
+          source: rel.fromId,
+          target: rel.toId,
+          label: rel.type
+        }
+      }))
+
+    return (
+      <Card title="Graph">
+        <GraphCanvas elements={{ nodes, edges }} />
+      </Card>
+    )
+  }
+
   if (type === 'timeline') return <TimelinePanel />
   if (type === 'map') return <MapPanel />
-  if (type === 'graph') return <GraphPanel />
 
   return <div className="text-white opacity-70">Unknown panel type: {type}</div>
 }
