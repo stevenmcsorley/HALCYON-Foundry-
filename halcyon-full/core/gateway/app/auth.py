@@ -63,11 +63,15 @@ def get_signing_key(token: str, jwks: Dict) -> Optional[jwk.Key]:
 
 async def verify_token(token: str) -> Optional[Dict]:
     """Verify JWT token and return decoded payload."""
+    import logging
+    logger = logging.getLogger("gateway.auth")
+    
     if settings.dev_mode:
         # In dev mode, skip verification for testing
         try:
             return jwt.get_unverified_claims(token)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"DEV_MODE token decode failed: {e}")
             return None
 
     try:
@@ -75,36 +79,55 @@ async def verify_token(token: str) -> Optional[Dict]:
         signing_key = get_signing_key(token, jwks_data)
 
         if not signing_key:
+            logger.warning("No signing key found for token")
             return None
 
         discovery = await get_discovery_document()
         issuer = discovery.get("issuer")
+        
+        # Decode token without verification first to check if it has an audience claim
+        unverified_payload = jwt.get_unverified_claims(token)
+        has_audience = "aud" in unverified_payload
         
         # For Keycloak, tokens can have audience as:
         # - UI client ID (halcyon-ui)
         # - Realm name (halcyon-dev)
         # - account (account service)
         # - Gateway client ID (halcyon-gateway) if client-to-client tokens
-        # We accept any of these valid audiences
-        from .config import settings as config_settings
-        realm_name = config_settings.keycloak_realm
-        valid_audiences = [
-            "account",  # Keycloak account service
-            realm_name,  # Realm name
-            "halcyon-ui",  # UI client ID
-            config_settings.keycloak_client_id,  # Gateway client ID (for client-to-client)
-        ]
+        # Some Keycloak tokens (especially from public clients) may not have audience
+        # Only validate audience if it's present in the token
+        verify_options = {"verify_aud": has_audience}
+        decode_kwargs = {
+            "algorithms": [settings.jwt_algorithm],
+            "issuer": issuer,
+            "options": verify_options,
+        }
+        
+        if has_audience:
+            from .config import settings as config_settings
+            realm_name = config_settings.keycloak_realm
+            valid_audiences = [
+                "account",  # Keycloak account service
+                realm_name,  # Realm name
+                "halcyon-ui",  # UI client ID
+                config_settings.keycloak_client_id,  # Gateway client ID (for client-to-client)
+            ]
+            decode_kwargs["audience"] = valid_audiences
 
-        payload = jwt.decode(
-            token,
-            signing_key,
-            algorithms=[settings.jwt_algorithm],
-            audience=valid_audiences,
-            issuer=issuer,
-            options={"verify_aud": True},
-        )
+        payload = jwt.decode(token, signing_key, **decode_kwargs)
+        logger.debug(f"Token verified successfully for subject: {payload.get('sub')}")
         return payload
-    except Exception:
+    except jwt.ExpiredSignatureError:
+        logger.warning("Token has expired")
+        return None
+    except jwt.JWTClaimsError as e:
+        logger.warning(f"JWT claims validation failed: {e}")
+        return None
+    except jwt.JWTError as e:
+        logger.warning(f"JWT validation error: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error during token verification: {e}", exc_info=True)
         return None
 
 
