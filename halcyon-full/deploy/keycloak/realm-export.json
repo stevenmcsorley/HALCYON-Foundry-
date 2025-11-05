@@ -1,6 +1,9 @@
 {
   "realm": "halcyon-dev",
   "enabled": true,
+  "requiredActions": [],
+  "accessTokenLifespan": 300,
+  "accessTokenLifespanForImplicitFlow": 900,
   "roles": {
     "realm": [
       {
@@ -59,7 +62,9 @@
       ],
       "email": "admin@halcyon.dev",
       "emailVerified": true,
-      "firstName": "Admin"
+      "firstName": "Admin",
+      "requiredActions": [],
+      "totp": false
     },
     {
       "username": "analyst",
@@ -76,7 +81,9 @@
       ],
       "email": "analyst@halcyon.dev",
       "emailVerified": true,
-      "firstName": "Analyst"
+      "firstName": "Analyst",
+      "requiredActions": [],
+      "totp": false
     }
   ]
 }
