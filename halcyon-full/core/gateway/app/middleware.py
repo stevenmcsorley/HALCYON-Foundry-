@@ -43,6 +43,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         token = auth_header.split(" ", 1)[1]
         
+        failure_reason = "invalid_token"  # Default failure reason
         try:
             from jose import jwt as jose_jwt
             payload = await verify_token(token)
