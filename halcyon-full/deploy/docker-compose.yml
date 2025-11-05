@@ -56,7 +56,7 @@ services:
       DATASOURCES_DIR: /app/datasources
       ONTOLOGY_BASE_URL: http://ontology:8081
     volumes:
-      - ../../halcyon-full/datasources:/app/datasources:ro
+      - ../datasources:/app/datasources:ro
     depends_on: [ ontology ]
     ports: [ "8090:8090" ]
 
