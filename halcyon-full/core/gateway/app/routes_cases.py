@@ -7,6 +7,8 @@ from .repo_cases import (
     create_case, update_case, get_case, list_cases,
     add_case_note, list_case_notes, assign_alerts_to_case
 )
+from .resolvers_cases import apply_ml_suggestions
+from .metrics import ml_suggestion_applied_total
 from .ws_pubsub import hub
 from .config import settings
 import logging
@@ -37,7 +39,7 @@ def require_roles(allowed_roles: List[str]):
     return _check
 
 
-@router.get("", response_model=List[Case])
+@router.get("", response_model=List[Case], response_model_by_alias=True)
 async def get_cases_list(
     status: Optional[str] = None,
     owner: Optional[str] = None,
@@ -54,7 +56,7 @@ async def get_cases_list(
         return [Case(**c) for c in cases]
 
 
-@router.post("", response_model=Case, status_code=201)
+@router.post("", response_model=Case, status_code=201, response_model_by_alias=True)
 async def post_case(
     payload: CaseCreate,
     user=Depends(require_roles(["analyst", "admin"])),
@@ -65,11 +67,18 @@ async def post_case(
         case = await create_case(conn, payload, user.get("sub"))
         from .metrics import cases_created_total
         cases_created_total.labels(priority=case["priority"]).inc()
+        
+        # Apply ML suggestions
+        await apply_ml_suggestions(conn, case)
+        
+        # Fetch updated case with ML suggestions
+        case = await get_case(conn, case["id"])
+        
         logger.info("case_created", extra={"case_id": case["id"], "created_by": user.get("sub")})
         return Case(**case)
 
 
-@router.get("/{case_id}", response_model=Case)
+@router.get("/{case_id}", response_model=Case, response_model_by_alias=True)
 async def get_case_detail(case_id: int, user=Depends(get_user)):
     """Get a case by ID (viewer+ can read)."""
     pool = await get_pool()
@@ -80,7 +89,7 @@ async def get_case_detail(case_id: int, user=Depends(get_user)):
         return Case(**case)
 
 
-@router.patch("/{case_id}", response_model=Case)
+@router.patch("/{case_id}", response_model=Case, response_model_by_alias=True)
 async def patch_case(
     case_id: int,
     payload: CaseUpdate,
@@ -92,6 +101,12 @@ async def patch_case(
         case = await update_case(conn, case_id, payload)
         if not case:
             raise HTTPException(status_code=404, detail="Case not found")
+        
+        # Recompute ML suggestions if title, priority, or status changed
+        if payload.title or payload.priority or payload.status:
+            await apply_ml_suggestions(conn, case)
+            # Fetch updated case with ML suggestions
+            case = await get_case(conn, case_id)
         
         # Increment resolved metric if status changed to resolved|closed
         if payload.status and payload.status in ("resolved", "closed"):
@@ -171,3 +186,69 @@ async def post_assign_alerts(
             "assigned_by": user.get("sub"),
         })
         return {"ok": True, "assigned_count": count}
+
+
+@router.patch("/{case_id}/adopt/priority", response_model=Case, response_model_by_alias=True)
+async def adopt_priority_suggestion(
+    case_id: int,
+    user=Depends(require_roles(["analyst", "admin"])),
+):
+    """Adopt ML-suggested priority for a case (analyst/admin only)."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        case = await get_case(conn, case_id)
+        if not case:
+            raise HTTPException(status_code=404, detail="Case not found")
+        
+        if not case.get("priority_suggestion"):
+            raise HTTPException(status_code=400, detail="No priority suggestion available")
+        
+        # Update case with suggested priority
+        updated = await update_case(conn, case_id, CaseUpdate(priority=case["priority_suggestion"]))
+        if not updated:
+            raise HTTPException(status_code=404, detail="Case not found")
+        
+        ml_suggestion_applied_total.labels(type="priority").inc()
+        logger.info("ml_suggestion_adopted", extra={
+            "case_id": case_id,
+            "type": "priority",
+            "value": case["priority_suggestion"],
+            "adopted_by": user.get("sub"),
+        })
+        
+        # Fetch updated case
+        case = await get_case(conn, case_id)
+        return Case(**case)
+
+
+@router.patch("/{case_id}/adopt/owner", response_model=Case, response_model_by_alias=True)
+async def adopt_owner_suggestion(
+    case_id: int,
+    user=Depends(require_roles(["analyst", "admin"])),
+):
+    """Adopt ML-suggested owner for a case (analyst/admin only)."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        case = await get_case(conn, case_id)
+        if not case:
+            raise HTTPException(status_code=404, detail="Case not found")
+        
+        if not case.get("owner_suggestion"):
+            raise HTTPException(status_code=400, detail="No owner suggestion available")
+        
+        # Update case with suggested owner
+        updated = await update_case(conn, case_id, CaseUpdate(owner=case["owner_suggestion"]))
+        if not updated:
+            raise HTTPException(status_code=404, detail="Case not found")
+        
+        ml_suggestion_applied_total.labels(type="owner").inc()
+        logger.info("ml_suggestion_adopted", extra={
+            "case_id": case_id,
+            "type": "owner",
+            "value": case["owner_suggestion"],
+            "adopted_by": user.get("sub"),
+        })
+        
+        # Fetch updated case
+        case = await get_case(conn, case_id)
+        return Case(**case)

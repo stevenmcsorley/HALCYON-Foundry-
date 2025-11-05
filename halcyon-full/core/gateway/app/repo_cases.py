@@ -1,5 +1,6 @@
 """Repository functions for Cases & Ownership."""
 import asyncpg
+import json
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from .models_cases import CaseCreate, CaseUpdate, CaseNoteCreate
@@ -85,10 +86,24 @@ async def get_case(conn: asyncpg.Connection, case_id: int) -> Optional[Dict[str,
     """Get a case by ID."""
     row = await conn.fetchrow(
         "SELECT id, title, description, status, priority, owner, created_by, "
-        "created_at, updated_at, resolved_at FROM cases WHERE id = $1",
+        "created_at, updated_at, resolved_at, "
+        "priority_suggestion, owner_suggestion, similar_case_ids, ml_version "
+        "FROM cases WHERE id = $1",
         case_id,
     )
-    return dict(row) if row else None
+    if not row:
+        return None
+    result = dict(row)
+    # Parse JSONB similar_case_ids to list (asyncpg may return as list or str)
+    if result.get("similar_case_ids") is None:
+        result["similar_case_ids"] = []
+    elif isinstance(result["similar_case_ids"], str):
+        try:
+            result["similar_case_ids"] = json.loads(result["similar_case_ids"])
+        except (json.JSONDecodeError, TypeError):
+            result["similar_case_ids"] = []
+    # asyncpg may already return as list, so we're good
+    return result
 
 
 async def list_cases(
@@ -130,7 +145,8 @@ async def list_cases(
     rows = await conn.fetch(
         f"""
         SELECT id, title, description, status, priority, owner, created_by,
-               created_at, updated_at, resolved_at
+               created_at, updated_at, resolved_at,
+               priority_suggestion, owner_suggestion, similar_case_ids, ml_version
         FROM cases
         {where_clause}
         ORDER BY created_at DESC
@@ -138,7 +154,20 @@ async def list_cases(
         """,
         *params,
     )
-    return [dict(row) for row in rows]
+    results = []
+    for row in rows:
+        result = dict(row)
+        # Parse JSONB similar_case_ids to list (asyncpg may return as list or str)
+        if result.get("similar_case_ids") is None:
+            result["similar_case_ids"] = []
+        elif isinstance(result["similar_case_ids"], str):
+            try:
+                result["similar_case_ids"] = json.loads(result["similar_case_ids"])
+            except (json.JSONDecodeError, TypeError):
+                result["similar_case_ids"] = []
+        # asyncpg may already return as list, so we're good
+        results.append(result)
+    return results
 
 
 async def add_case_note(
@@ -183,3 +212,34 @@ async def assign_alerts_to_case(
     )
     # Parse "UPDATE N" to get count
     return int(result.split()[-1]) if result else 0
+
+
+async def get_owner_history_counts(conn: asyncpg.Connection, limit: int = 500) -> Dict[str, int]:
+    """Return mapping of owner->count for resolved/closed cases."""
+    rows = await conn.fetch(
+        """
+        SELECT owner, COUNT(*) cnt
+        FROM cases
+        WHERE owner IS NOT NULL AND status IN ('resolved', 'closed')
+        GROUP BY owner
+        ORDER BY cnt DESC
+        LIMIT $1
+        """,
+        limit,
+    )
+    return {r["owner"]: r["cnt"] for r in rows}
+
+
+async def get_recent_cases_for_similarity(conn: asyncpg.Connection, limit: int = 200) -> List[Dict[str, Any]]:
+    """Get recent cases for similarity matching."""
+    rows = await conn.fetch(
+        """
+        SELECT id, title
+        FROM cases
+        WHERE status IN ('open', 'in_progress', 'resolved', 'closed')
+        ORDER BY id DESC
+        LIMIT $1
+        """,
+        limit,
+    )
+    return [{"id": r["id"], "title": r["title"]} for r in rows]

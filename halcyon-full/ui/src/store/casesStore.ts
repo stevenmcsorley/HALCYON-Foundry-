@@ -15,6 +15,10 @@ export interface Case {
   createdAt: string;   // ISO
   updatedAt: string;   // ISO
   resolvedAt?: string | null;
+  prioritySuggestion?: string | null;
+  ownerSuggestion?: string | null;
+  similarCaseIds?: number[] | null;
+  mlVersion?: string | null;
 }
 
 export interface CaseNote {
@@ -43,7 +47,24 @@ type CasesState = {
   listNotes: (caseId: number) => Promise<CaseNote[]>;
   addNote: (caseId: number, body: string) => Promise<CaseNote>;
   assignAlerts: (caseId: number, alertIds: number[]) => Promise<void>;
+  adoptPriority: (id: number) => Promise<Case>;
+  adoptOwner: (id: number) => Promise<Case>;
   setSelected: (c?: Case | null) => void;
+};
+
+// Helper to transform snake_case API response to camelCase
+const transformCase = (data: any): Case => {
+  return {
+    ...data,
+    createdBy: data.createdBy || data.created_by,
+    createdAt: data.createdAt || data.created_at,
+    updatedAt: data.updatedAt || data.updated_at,
+    resolvedAt: data.resolvedAt || data.resolved_at,
+    prioritySuggestion: data.prioritySuggestion || data.priority_suggestion,
+    ownerSuggestion: data.ownerSuggestion || data.owner_suggestion,
+    similarCaseIds: data.similarCaseIds || data.similar_case_ids,
+    mlVersion: data.mlVersion || data.ml_version,
+  };
 };
 
 export const useCasesStore = create<CasesState>((set, get) => ({
@@ -56,8 +77,9 @@ export const useCasesStore = create<CasesState>((set, get) => ({
   list: async (q = {}) => {
     set({ loading: true });
     try {
-      const res = await api.get<Case[]>("/cases", { params: q });
-      set({ items: res.data ?? [] });
+      const res = await api.get<any[]>("/cases", { params: q });
+      const transformed = (res.data ?? []).map(transformCase);
+      set({ items: transformed });
     } catch (e: any) {
       const msg = e?.message || '';
       if (msg.includes('401') || msg.includes('403') || msg.includes('404') || msg.includes('Unauthorized') || msg.includes('Not Found')) {
@@ -72,8 +94,8 @@ export const useCasesStore = create<CasesState>((set, get) => ({
 
   get: async (id) => {
     try {
-      const res = await api.get<Case>(`/cases/${id}`);
-      return res.data;
+      const res = await api.get<any>(`/cases/${id}`);
+      return transformCase(res.data);
     } catch (e: any) {
       const msg = e?.message || '';
       if (msg.includes('401') || msg.includes('403') || msg.includes('404') || msg.includes('Unauthorized') || msg.includes('Not Found')) {
@@ -84,21 +106,23 @@ export const useCasesStore = create<CasesState>((set, get) => ({
   },
 
   create: async (payload) => {
-    const res = await api.post<Case>("/cases", payload);
+    const res = await api.post<any>("/cases", payload);
+    const transformed = transformCase(res.data);
     // Refresh list after create
     await get().list();
-    return res.data;
+    return transformed;
   },
 
   update: async (id, payload) => {
     try {
-      const res = await api.patch<Case>(`/cases/${id}`, payload);
+      const res = await api.patch<any>(`/cases/${id}`, payload);
+      const transformed = transformCase(res.data);
       // Update in list if present
       set(state => ({
-        items: state.items.map(c => c.id === id ? res.data : c),
-        selected: state.selected?.id === id ? res.data : state.selected
+        items: state.items.map(c => c.id === id ? transformed : c),
+        selected: state.selected?.id === id ? transformed : state.selected
       }));
-      return res.data;
+      return transformed;
     } catch (e: any) {
       const msg = e?.message || '';
       if (msg.includes('401') || msg.includes('403') || msg.includes('404') || msg.includes('Unauthorized') || msg.includes('Not Found')) {
@@ -133,6 +157,44 @@ export const useCasesStore = create<CasesState>((set, get) => ({
       const msg = e?.message || '';
       if (msg.includes('401') || msg.includes('403') || msg.includes('404') || msg.includes('Unauthorized') || msg.includes('Not Found')) {
         throw new Error('Failed to assign alerts');
+      }
+      throw e;
+    }
+  },
+
+  adoptPriority: async (id) => {
+    try {
+      const res = await api.patch<any>(`/cases/${id}/adopt/priority`);
+      const transformed = transformCase(res.data);
+      // Update in list and selected
+      set(state => ({
+        items: state.items.map(c => c.id === id ? transformed : c),
+        selected: state.selected?.id === id ? transformed : state.selected
+      }));
+      return transformed;
+    } catch (e: any) {
+      const msg = e?.message || '';
+      if (msg.includes('401') || msg.includes('403') || msg.includes('404') || msg.includes('Unauthorized') || msg.includes('Not Found')) {
+        throw new Error('Failed to adopt priority suggestion');
+      }
+      throw e;
+    }
+  },
+
+  adoptOwner: async (id) => {
+    try {
+      const res = await api.patch<any>(`/cases/${id}/adopt/owner`);
+      const transformed = transformCase(res.data);
+      // Update in list and selected
+      set(state => ({
+        items: state.items.map(c => c.id === id ? transformed : c),
+        selected: state.selected?.id === id ? transformed : state.selected
+      }));
+      return transformed;
+    } catch (e: any) {
+      const msg = e?.message || '';
+      if (msg.includes('401') || msg.includes('403') || msg.includes('404') || msg.includes('Unauthorized') || msg.includes('Not Found')) {
+        throw new Error('Failed to adopt owner suggestion');
       }
       throw e;
     }

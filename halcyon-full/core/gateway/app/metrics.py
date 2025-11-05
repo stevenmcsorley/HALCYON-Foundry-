@@ -99,3 +99,28 @@ alerts_assigned_to_case_total = Counter(
     "alerts_assigned_to_case_total",
     "Total number of alerts assigned to cases",
 )
+
+# PR-4B: ML Scoring metrics
+ml_inference_total = Counter(
+    "ml_inference_total",
+    "ML inference attempts",
+    ["model", "status"],  # status: "success" or "fail"
+)
+
+ml_suggestion_applied_total = Counter(
+    "ml_suggestion_applied_total",
+    "User applied ML suggestions",
+    ["type"],  # type: "priority" or "owner"
+)
+
+ml_inference_latency_seconds = Histogram(
+    "ml_inference_latency_seconds",
+    "ML inference latency (s)",
+    ["model"],
+)
+
+ml_model_version_info = Gauge(
+    "ml_model_version_info",
+    "ML model version info",
+    ["model", "version"],
+)

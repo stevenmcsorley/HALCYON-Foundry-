@@ -3,6 +3,7 @@ import { Case, useCasesStore } from "@/store/casesStore";
 import CaseMeta from "./CaseMeta";
 import CaseNotes from "./CaseNotes";
 import CaseAlerts from "./CaseAlerts";
+import CaseInsights from "./CaseInsights";
 
 interface CaseViewProps {
   caseId: number;
@@ -16,6 +17,7 @@ export default function CaseView({ caseId, onAlertClick }: CaseViewProps) {
 
   useEffect(() => {
     loadCase();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caseId]);
 
   const loadCase = async () => {
@@ -32,6 +34,8 @@ export default function CaseView({ caseId, onAlertClick }: CaseViewProps) {
 
   const handleUpdate = (updated: Case) => {
     setCaseData(updated);
+    // Reload case to get fresh ML suggestions if needed
+    loadCase();
   };
 
   if (loading) {
@@ -55,6 +59,8 @@ export default function CaseView({ caseId, onAlertClick }: CaseViewProps) {
       </div>
 
       <CaseMeta caseData={caseData} onUpdate={handleUpdate} />
+
+      <CaseInsights caseData={caseData} onUpdate={handleUpdate} />
 
       <CaseAlerts caseId={caseId} onAlertClick={onAlertClick} />
 

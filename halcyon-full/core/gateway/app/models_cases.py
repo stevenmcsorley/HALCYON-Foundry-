@@ -1,5 +1,5 @@
 """Pydantic models for Cases & Ownership."""
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 
@@ -25,14 +25,17 @@ class CaseUpdate(BaseModel):
 
 
 class Case(CaseBase):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    
     id: int
-    created_by: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-    resolved_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
+    created_by: Optional[str] = Field(None, alias="createdBy", serialization_alias="createdBy")
+    created_at: datetime = Field(..., alias="createdAt", serialization_alias="createdAt")
+    updated_at: datetime = Field(..., alias="updatedAt", serialization_alias="updatedAt")
+    resolved_at: Optional[datetime] = Field(None, alias="resolvedAt", serialization_alias="resolvedAt")
+    priority_suggestion: Optional[str] = Field(None, alias="prioritySuggestion", serialization_alias="prioritySuggestion")
+    owner_suggestion: Optional[str] = Field(None, alias="ownerSuggestion", serialization_alias="ownerSuggestion")
+    similar_case_ids: Optional[List[int]] = Field(None, alias="similarCaseIds", serialization_alias="similarCaseIds")
+    ml_version: Optional[str] = Field(None, alias="mlVersion", serialization_alias="mlVersion")
 
 
 class CaseNoteBase(BaseModel):

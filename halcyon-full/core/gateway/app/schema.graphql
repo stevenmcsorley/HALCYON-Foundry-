@@ -35,6 +35,8 @@ type Mutation {
   updateCase(id: ID!, input: CaseUpdateInput!): Case!
   addCaseNote(caseId: ID!, body: String!): CaseNote!
   assignAlertsToCase(caseId: ID!, alertIds: [ID!]!): Boolean!
+  adoptPrioritySuggestion(caseId: ID!): Case!
+  adoptOwnerSuggestion(caseId: ID!): Case!
 }
 
 type Entity {
@@ -176,6 +178,10 @@ type Case {
   createdAt: String!
   updatedAt: String!
   resolvedAt: String
+  prioritySuggestion: String
+  ownerSuggestion: String
+  similarCaseIds: [Int!]
+  mlVersion: String
 }
 
 type CaseNote {

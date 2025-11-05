@@ -103,8 +103,16 @@ export default function CasesList({ onSelect }: CasesListProps) {
                   {caseData.status.replace("_", " ")}
                 </span>
               </div>
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-2 text-xs flex-wrap">
                 <span className={getPriorityColor(caseData.priority)}>{caseData.priority}</span>
+                {caseData.prioritySuggestion && caseData.prioritySuggestion !== caseData.priority && (
+                  <>
+                    <span className="text-white/40">•</span>
+                    <span className="text-purple-400" title="AI suggested priority">
+                      AI: {caseData.prioritySuggestion}
+                    </span>
+                  </>
+                )}
                 {caseData.owner && (
                   <>
                     <span className="text-white/40">•</span>

@@ -3,17 +3,58 @@ from ariadne import QueryType, MutationType
 from .db import get_pool
 from .repo_cases import (
     create_case, update_case, get_case, list_cases,
-    add_case_note, list_case_notes, assign_alerts_to_case
+    add_case_note, list_case_notes, assign_alerts_to_case,
+    get_owner_history_counts, get_recent_cases_for_similarity
 )
 from .models_cases import CaseCreate, CaseUpdate, CaseNoteCreate
+from .ml_scoring import score_case
 from .ws_pubsub import hub
 from .metrics import cases_created_total, cases_resolved_total, alerts_assigned_to_case_total
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
 cases_query = QueryType()
 cases_mutation = MutationType()
+
+
+async def apply_ml_suggestions(conn, case_row):
+    """Apply ML suggestions to a case."""
+    try:
+        history = await get_owner_history_counts(conn)
+        sims = await get_recent_cases_for_similarity(conn)
+        
+        # Get severity from case if available (from alerts)
+        severity = None  # Could be extracted from linked alerts if needed
+        
+        suggestions = score_case(
+            case_row["title"],
+            severity,
+            history,
+            sims,
+        )
+        
+        await conn.execute(
+            """
+            UPDATE cases
+            SET priority_suggestion = $1,
+                owner_suggestion = $2,
+                similar_case_ids = $3,
+                ml_version = $4
+            WHERE id = $5
+            """,
+            suggestions["priority_suggestion"],
+            suggestions["owner_suggestion"],
+            json.dumps(suggestions["similar_case_ids"]),
+            suggestions["ml_version"],
+            case_row["id"],
+        )
+        
+        return suggestions
+    except Exception as e:
+        logger.warning("ml_suggestion_failed", extra={"case_id": case_row.get("id"), "error": str(e)})
+        return None
 
 
 @cases_query.field("cases")
@@ -51,6 +92,13 @@ async def resolve_create_case(obj, info, input: dict):
         data = CaseCreate(**input)
         case = await create_case(conn, data, user.get("sub"))
         cases_created_total.labels(priority=case["priority"]).inc()
+        
+        # Apply ML suggestions
+        await apply_ml_suggestions(conn, case)
+        
+        # Fetch updated case with ML suggestions
+        case = await get_case(conn, case["id"])
+        
         logger.info("case_created", extra={"case_id": case["id"], "created_by": user.get("sub")})
         return case
 
@@ -65,6 +113,12 @@ async def resolve_update_case(obj, info, id: int, input: dict):
         case = await update_case(conn, id, data)
         if not case:
             return None
+        
+        # Recompute ML suggestions if title, priority, or status changed
+        if data.title or data.priority or data.status:
+            await apply_ml_suggestions(conn, case)
+            # Fetch updated case with ML suggestions
+            case = await get_case(conn, id)
         
         # Increment resolved metric if status changed to resolved|closed
         if data.status and data.status in ("resolved", "closed"):
@@ -125,3 +179,67 @@ async def resolve_assign_alerts_to_case(obj, info, caseId: int, alertIds: list[i
             "assigned_by": user.get("sub"),
         })
         return True
+
+
+@cases_mutation.field("adoptPrioritySuggestion")
+async def resolve_adopt_priority_suggestion(obj, info, caseId: int):
+    """Adopt ML-suggested priority for a case."""
+    user = info.context.get("user", {})
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        case = await get_case(conn, caseId)
+        if not case:
+            return None
+        
+        if not case.get("priority_suggestion"):
+            return None
+        
+        # Update case with suggested priority
+        updated = await update_case(conn, caseId, CaseUpdate(priority=case["priority_suggestion"]))
+        if not updated:
+            return None
+        
+        from .metrics import ml_suggestion_applied_total
+        ml_suggestion_applied_total.labels(type="priority").inc()
+        logger.info("ml_suggestion_adopted", extra={
+            "case_id": caseId,
+            "type": "priority",
+            "value": case["priority_suggestion"],
+            "adopted_by": user.get("sub"),
+        })
+        
+        # Fetch updated case
+        case = await get_case(conn, caseId)
+        return case
+
+
+@cases_mutation.field("adoptOwnerSuggestion")
+async def resolve_adopt_owner_suggestion(obj, info, caseId: int):
+    """Adopt ML-suggested owner for a case."""
+    user = info.context.get("user", {})
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        case = await get_case(conn, caseId)
+        if not case:
+            return None
+        
+        if not case.get("owner_suggestion"):
+            return None
+        
+        # Update case with suggested owner
+        updated = await update_case(conn, caseId, CaseUpdate(owner=case["owner_suggestion"]))
+        if not updated:
+            return None
+        
+        from .metrics import ml_suggestion_applied_total
+        ml_suggestion_applied_total.labels(type="owner").inc()
+        logger.info("ml_suggestion_adopted", extra={
+            "case_id": caseId,
+            "type": "owner",
+            "value": case["owner_suggestion"],
+            "adopted_by": user.get("sub"),
+        })
+        
+        # Fetch updated case
+        case = await get_case(conn, caseId)
+        return case
