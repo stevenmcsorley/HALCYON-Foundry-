@@ -74,24 +74,24 @@ export default function AlertList() {
       <div className="space-y-3">
         <div className="flex gap-2 items-center">
           <select
-            className="select"
+            className="bg-panel border border-white/20 rounded px-3 py-2 text-white focus:outline-none focus:border-teal-500"
             value={filters.status ?? ""}
             onChange={(e) => setFilters({ status: e.target.value || undefined })}
           >
-            <option value="">All Status</option>
-            <option value="new">New</option>
-            <option value="ack">Acknowledged</option>
-            <option value="resolved">Resolved</option>
+            <option value="" className="bg-panel text-white">All Status</option>
+            <option value="new" className="bg-panel text-white">New</option>
+            <option value="ack" className="bg-panel text-white">Acknowledged</option>
+            <option value="resolved" className="bg-panel text-white">Resolved</option>
           </select>
           <select
-            className="select"
+            className="bg-panel border border-white/20 rounded px-3 py-2 text-white focus:outline-none focus:border-teal-500"
             value={filters.severity ?? ""}
             onChange={(e) => setFilters({ severity: e.target.value || undefined })}
           >
-            <option value="">All Severity</option>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
+            <option value="" className="bg-panel text-white">All Severity</option>
+            <option value="low" className="bg-panel text-white">Low</option>
+            <option value="medium" className="bg-panel text-white">Medium</option>
+            <option value="high" className="bg-panel text-white">High</option>
           </select>
         </div>
 

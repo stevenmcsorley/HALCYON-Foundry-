@@ -63,6 +63,13 @@ export async function login(username: string, password: string): Promise<{ token
   // Clear any pending refresh promise on successful login
   refreshPromise = null
 
+  // Clear redirect flag after successful login to prevent loops
+  try {
+    sessionStorage.removeItem('halcyon_redirecting_to_login')
+  } catch {
+    // Ignore if sessionStorage unavailable
+  }
+
   return { token, user, refreshToken }
 }
 

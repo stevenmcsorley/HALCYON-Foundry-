@@ -2,8 +2,41 @@ import * as auth from './auth'
 
 type GraphQLResponse<T> = { data?: T; errors?: { message: string }[] }
 
-// Flag to prevent multiple redirects
-let isRedirecting = false
+// Use sessionStorage to persist redirect state across page loads
+// This prevents infinite redirect loops when session expires
+const REDIRECT_FLAG_KEY = 'halcyon_redirecting_to_login'
+
+function isRedirectingToLogin(): boolean {
+  try {
+    return sessionStorage.getItem(REDIRECT_FLAG_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function setRedirectingFlag(value: boolean): void {
+  try {
+    if (value) {
+      sessionStorage.setItem(REDIRECT_FLAG_KEY, 'true')
+    } else {
+      sessionStorage.removeItem(REDIRECT_FLAG_KEY)
+    }
+  } catch {
+    // Ignore if sessionStorage unavailable
+  }
+}
+
+function shouldRedirectToLogin(): boolean {
+  // Don't redirect if already on login page or already redirecting
+  if (typeof window === 'undefined') return false
+  if (window.location.pathname === '/login' || window.location.pathname.includes('/login')) {
+    return false
+  }
+  if (isRedirectingToLogin()) {
+    return false
+  }
+  return true
+}
 
 export async function gql<T>(query: string, variables?: Record<string, any>): Promise<T> {
   const token = auth.getToken()
@@ -21,8 +54,8 @@ export async function gql<T>(query: string, variables?: Record<string, any>): Pr
     body: JSON.stringify({ query, variables }),
   })
 
-  if (res.status === 401 && !isRedirecting) {
-    isRedirecting = true
+  if (res.status === 401 && shouldRedirectToLogin()) {
+    setRedirectingFlag(true)
     window.location.href = '/login'
     throw new Error('Unauthorized')
   }
@@ -50,7 +83,7 @@ const baseUrl = gatewayUrl.includes('/graphql')
 export const api = {
   async get<T = any>(path: string, config?: { params?: Record<string, any> }): Promise<{ data: T }> {
     // Don't make API calls if we're already redirecting
-    if (isRedirecting) {
+    if (isRedirectingToLogin()) {
       throw new Error('Unauthorized')
     }
 
@@ -58,8 +91,8 @@ export const api = {
     
     // If no token, redirect immediately without making the request
     if (!token) {
-      if (!isRedirecting) {
-        isRedirecting = true
+      if (shouldRedirectToLogin()) {
+        setRedirectingFlag(true)
         window.location.href = '/login'
       }
       throw new Error('Unauthorized')
@@ -84,8 +117,8 @@ export const api = {
 
     const res = await fetch(url, { headers })
 
-    if (res.status === 401 && !isRedirecting) {
-      isRedirecting = true
+    if (res.status === 401 && shouldRedirectToLogin()) {
+      setRedirectingFlag(true)
       window.location.href = '/login'
       throw new Error('Unauthorized')
     }
@@ -100,7 +133,7 @@ export const api = {
 
     async post<T = any>(path: string, body?: any): Promise<{ data: T }> {
     // Don't make API calls if we're already redirecting
-    if (isRedirecting) {
+    if (isRedirectingToLogin()) {
       throw new Error('Unauthorized')
     }
 
@@ -108,8 +141,8 @@ export const api = {
     
     // If no token, redirect immediately without making the request
     if (!token) {
-      if (!isRedirecting) {
-        isRedirecting = true
+      if (shouldRedirectToLogin()) {
+        setRedirectingFlag(true)
         window.location.href = '/login'
       }
       throw new Error('Unauthorized')
@@ -126,8 +159,8 @@ export const api = {
       body: body ? JSON.stringify(body) : undefined,
     })
 
-    if (res.status === 401 && !isRedirecting) {
-      isRedirecting = true
+    if (res.status === 401 && shouldRedirectToLogin()) {
+      setRedirectingFlag(true)
       window.location.href = '/login'
       throw new Error('Unauthorized')
     }
@@ -139,4 +172,9 @@ export const api = {
     const data = await res.json()
     return { data }
   },
+}
+
+// Export function to clear redirect flag (call after successful login)
+export function clearRedirectFlag(): void {
+  setRedirectingFlag(false)
 }
