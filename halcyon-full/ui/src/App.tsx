@@ -9,15 +9,18 @@ import UserMenu from './components/UserMenu'
 import SavedQueriesPanel from './modules/saved/SavedQueriesPanel'
 import DashboardEditor from './modules/dashboards/DashboardEditor'
 import AlertsTab from './modules/alerts/AlertsTab'
+import CasesTab from './modules/cases/CasesTab'
 import { NotificationBell } from './components/NotificationBell'
 import { useAuthStore } from './store/authStore'
+import { useCasesStore } from './store/casesStore'
 import * as auth from './services/auth'
 import { Toast, subscribeToToast } from './components/Toast'
 
-type Tab = 'console' | 'saved' | 'dashboards' | 'alerts'
+type Tab = 'console' | 'saved' | 'dashboards' | 'alerts' | 'cases'
 
 export default function App() {
   const { user, initialize, loading } = useAuthStore()
+  const { setSelected, get } = useCasesStore()
   const [activeTab, setActiveTab] = useState<Tab>('console')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [authInitialized, setAuthInitialized] = useState(false)
@@ -36,6 +39,35 @@ export default function App() {
     })
     return unsubscribe
   }, [])
+
+  // Handle navigation events between tabs
+  useEffect(() => {
+    const handleNavigateToCases = async (e: Event) => {
+      const customEvent = e as CustomEvent<{ caseId?: number }>
+      setActiveTab('cases')
+      if (customEvent.detail?.caseId) {
+        try {
+          const caseData = await get(customEvent.detail.caseId)
+          setSelected(caseData)
+        } catch (err) {
+          // Silent error - case might not exist
+        }
+      }
+    }
+    const handleNavigateToAlerts = (e: Event) => {
+      const customEvent = e as CustomEvent<{ alertId?: number }>
+      setActiveTab('alerts')
+      // Could scroll to alert or highlight it if needed
+    }
+
+    window.addEventListener('navigate-to-cases', handleNavigateToCases)
+    window.addEventListener('navigate-to-alerts', handleNavigateToAlerts)
+
+    return () => {
+      window.removeEventListener('navigate-to-cases', handleNavigateToCases)
+      window.removeEventListener('navigate-to-alerts', handleNavigateToAlerts)
+    }
+  }, [get, setSelected])
 
   // Helper to check if user has a specific role
   const hasRole = (role: string): boolean => {
@@ -121,6 +153,18 @@ export default function App() {
             Alerts
           </button>
         )}
+        {(hasRole('analyst') || hasRole('admin') || hasRole('viewer')) && (
+          <button
+            className={`px-3 py-2 text-sm font-medium ${
+              activeTab === 'cases'
+                ? 'border-b-2 border-white text-white'
+                : 'opacity-70 hover:opacity-100 text-white'
+            }`}
+            onClick={() => setActiveTab('cases')}
+          >
+            Cases
+          </button>
+        )}
       </div>
 
       {activeTab === 'console' && (
@@ -160,6 +204,12 @@ export default function App() {
       {activeTab === 'alerts' && (hasRole('analyst') || hasRole('admin')) && (
         <div className="h-[calc(100vh-8rem)] overflow-auto">
           <AlertsTab />
+        </div>
+      )}
+
+      {activeTab === 'cases' && (hasRole('analyst') || hasRole('admin') || hasRole('viewer')) && (
+        <div className="h-[calc(100vh-8rem)] overflow-auto">
+          <CasesTab />
         </div>
       )}
       

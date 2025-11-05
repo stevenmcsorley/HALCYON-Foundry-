@@ -8,12 +8,26 @@ type Alert = {
   entityId?: string;
   message: string;
   severity: "low" | "medium" | "high";
-  status: "new" | "ack" | "resolved";
+  status: "open" | "ack" | "resolved";
   createdAt: string;
   acknowledgedAt?: string;
   resolvedAt?: string;
   acknowledgedBy?: string;
   resolvedBy?: string;
+  count?: number;
+  firstSeen?: string;
+  lastSeen?: string;
+  fingerprint?: string;
+  groupKey?: string;
+  caseId?: number | null;
+  suppressedBy?: {
+    kind: 'silence' | 'maintenance';
+    id: number;
+    name: string;
+  };
+  suppressedByKind?: 'silence' | 'maintenance';
+  suppressedById?: number;
+  suppressedByName?: string;
 };
 
 type Filters = { status?: string; severity?: string };
@@ -97,13 +111,32 @@ export const useAlertsStore = create<State>((set, get) => ({
 // Wire WebSocket stream
 subscribe((m: any) => {
   if (m?.t === "alert.created") {
-    useAlertsStore.setState((s) => ({
-      alerts: [m.data, ...s.alerts],
-      unread: s.unread + 1,
-    }));
-  } else if (m?.t === "alert.updated") {
-    useAlertsStore.setState((s) => ({
-      alerts: s.alerts.map((a) => (a.id === m.data.id ? { ...a, ...m.data } : a)),
-    }));
+          // Map suppressedBy fields if present
+      const alertData = m.data;
+      if (alertData.suppressedByKind) {
+        alertData.suppressedBy = {
+          kind: alertData.suppressedByKind,
+          id: alertData.suppressedById || 0,
+          name: alertData.suppressedByName || '',
+        };
+      }
+      useAlertsStore.setState((s) => ({
+        alerts: [alertData, ...s.alerts],
+        unread: s.unread + (m.data.status === "open" ? 1 : 0),
+      }));
+    } else if (m?.t === "alert.updated") {
+      // Map suppressedBy fields if present
+      const alertData = m.data;
+      if (alertData.suppressedByKind) {
+        alertData.suppressedBy = {
+          kind: alertData.suppressedByKind,
+          id: alertData.suppressedById || 0,
+          name: alertData.suppressedByName || '',
+        };
+      }
+      useAlertsStore.setState((s) => ({
+        alerts: s.alerts.map((a) => (a.id === m.data.id ? { ...a, ...alertData } : a)),
+        // Don't increment unread on dedupe updates
+      }));
   }
 });

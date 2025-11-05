@@ -80,6 +80,9 @@ export default function RuleEditor() {
   return (
     <>
       <div className="space-y-3">
+        <div className="text-xs text-gray-500 p-2 bg-panel/50 rounded border border-gray-700">
+          💡 Use <strong>Silences</strong> for ad-hoc suppression and <strong>Maintenance</strong> for scheduled windows. Suppressed alerts do not notify but still stream to UI.
+        </div>
         <div>
           <label className="block text-sm font-medium mb-1 text-white">Rule Name</label>
           <input

@@ -83,3 +83,68 @@ All notable changes to HALCYON Foundry Core will be documented in this file.
   - Highlighted bars at cursor position
 - **Playback Hook**: Automatic cursor advancement based on playback speed
 
+---
+
+## Phase 4A: Cases & Ownership (2025-11-05)
+
+### Cases Management System
+- **Full Triage Pipeline**: Complete Alerts → Cases → Notes → Resolution workflow
+- **Cases Workspace**: New Cases tab with list/detail split view for analyst triage
+- **Alert-to-Case Linking**: Multi-select alerts and create cases with automatic assignment
+- **Case Chips**: Visual indicators on alert rows showing linked case IDs with click-to-navigate
+- **Cross-Tab Navigation**: Seamless navigation between Alerts and Cases tabs with case selection
+
+### Backend
+- **Database Schema**: 
+  - `cases` and `case_notes` tables created
+  - `alerts.case_id` foreign key column (nullable, cascade-safe)
+  - `case_status` ENUM: open, in_progress, resolved, closed
+  - `case_priority` ENUM: low, medium, high, critical
+  - 13 supporting indexes for fast triage queries
+- **REST API**: 7 endpoints for cases management:
+  - `GET /cases` - List cases (filterable by status, priority, owner, search)
+  - `POST /cases` - Create new case
+  - `GET /cases/{id}` - Retrieve case detail
+  - `PATCH /cases/{id}` - Update case metadata
+  - `GET /cases/{id}/notes` - List case notes
+  - `POST /cases/{id}/notes` - Add note to case
+  - `POST /cases/{id}/alerts:assign` - Link alerts to case
+- **GraphQL**: Case types and mutations added to schema
+- **Metrics**: 
+  - `cases_created_total{priority}` - Counter for case creation
+  - `cases_resolved_total` - Counter for case resolution
+  - `alerts_assigned_to_case_total` - Counter for alert assignments
+
+### Frontend
+- **Cases Store**: Zustand store (`casesStore.ts`) with full CRUD operations, notes management, and alert assignment
+- **UI Components**:
+  - `CasesTab.tsx` - Main workspace layout with list/detail view
+  - `CasesList.tsx` - Filterable list view (status, priority, owner, search)
+  - `CaseView.tsx` - Case detail composer
+  - `CaseMeta.tsx` - Inline editing for status/priority/owner (analyst/admin only)
+  - `CaseNotes.tsx` - Threaded notes view with add functionality
+  - `CaseAlerts.tsx` - Display linked alerts under case
+  - `CaseEditor.tsx` - Modal form for create/update
+  - `EmptyCaseHint.tsx` - Friendly empty state
+- **AlertList Enhancements**:
+  - Multi-select checkboxes for alerts (analyst/admin only)
+  - "Open as Case" button with pre-filled title (`[SEVERITY] {message}`)
+  - Case chip display (`Case #ID`) on alert rows with click-to-navigate
+- **RBAC Integration**:
+  - Viewer role: Read-only access to Cases tab
+  - Analyst/Admin roles: Full create/edit/assign capabilities
+- **Error Handling**: Silent 401/403/404 errors, AlertDialog only for 5xx/network/validation errors
+- **UX Improvements**:
+  - Toast notifications for success messages (no browser alerts)
+  - Consistent dark theme (bg-panel, text-white) across all components
+  - Inline hints for validation errors
+
+### Verified
+- Backend schema, endpoints, and metrics verified
+- Frontend components integrated and wired
+- Cross-tab navigation functional
+- RBAC enforcement working
+- Error handling policy implemented
+- Full E2E flow tested (backend + frontend)
+
+---

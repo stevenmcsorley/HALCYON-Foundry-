@@ -1,9 +1,14 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import AlertList from "./AlertList";
 import RuleEditor from "./RuleEditor";
+import SilencesPanel from "./SilencesPanel";
+import MaintenancePanel from "./MaintenancePanel";
 import { useAlertsStore } from "@/store/alertsStore";
 
+type AlertsSubTab = 'list' | 'rules' | 'silences' | 'maintenance';
+
 export default function AlertsTab() {
+  const [activeSubTab, setActiveSubTab] = useState<AlertsSubTab>('list');
   const load = useAlertsStore((s) => s.load);
   const setFilters = useAlertsStore((s) => s.setFilters);
   const setUnreadZero = () => useAlertsStore.setState({ unread: 0 });
@@ -28,14 +33,58 @@ export default function AlertsTab() {
   }, []);
 
   return (
-    <div className="h-full grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
-      <div className="h-full overflow-auto">
-        <h2 className="text-sm uppercase tracking-wide text-gray-400 mb-2">Alerts</h2>
-        <AlertList />
+    <div className="h-full flex flex-col p-4">
+      <div className="flex gap-4 border-b border-gray-800 mb-4">
+        <button
+          onClick={() => setActiveSubTab('list')}
+          className={`px-4 py-2 text-sm font-medium ${
+            activeSubTab === 'list'
+              ? 'border-b-2 border-teal-500 text-teal-400'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          List
+        </button>
+        <button
+          onClick={() => setActiveSubTab('rules')}
+          className={`px-4 py-2 text-sm font-medium ${
+            activeSubTab === 'rules'
+              ? 'border-b-2 border-teal-500 text-teal-400'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          Rules
+        </button>
+        <button
+          onClick={() => setActiveSubTab('silences')}
+          className={`px-4 py-2 text-sm font-medium ${
+            activeSubTab === 'silences'
+              ? 'border-b-2 border-teal-500 text-teal-400'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          Silences
+        </button>
+        <button
+          onClick={() => setActiveSubTab('maintenance')}
+          className={`px-4 py-2 text-sm font-medium ${
+            activeSubTab === 'maintenance'
+              ? 'border-b-2 border-teal-500 text-teal-400'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          Maintenance
+        </button>
       </div>
-      <div className="h-full overflow-auto">
-        <h2 className="text-sm uppercase tracking-wide text-gray-400 mb-2">Rule Editor</h2>
-        <RuleEditor />
+
+      <div className="flex-1 overflow-auto">
+        {activeSubTab === 'list' && <AlertList onCaseChipClick={(caseId) => {
+          // Navigate to cases tab - emit event that App.tsx can listen to
+          window.dispatchEvent(new CustomEvent('navigate-to-cases', { detail: { caseId } }));
+        }} />}
+        {activeSubTab === 'rules' && <RuleEditor />}
+        {activeSubTab === 'silences' && <SilencesPanel />}
+        {activeSubTab === 'maintenance' && <MaintenancePanel />}
       </div>
     </div>
   );

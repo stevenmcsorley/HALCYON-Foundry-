@@ -131,7 +131,85 @@ export const api = {
     return { data }
   },
 
-    async post<T = any>(path: string, body?: any): Promise<{ data: T }> {
+  async delete<T = any>(path: string): Promise<{ data: T }> {
+    if (isRedirectingToLogin()) {
+      throw new Error('Unauthorized')
+    }
+
+    const token = auth.getToken()
+    
+    if (!token) {
+      if (shouldRedirectToLogin()) {
+        setRedirectingFlag(true)
+        window.location.href = '/login'
+      }
+      throw new Error('Unauthorized')
+    }
+
+    const headers: Record<string, string> = { 
+      'Authorization': `Bearer ${token}`
+    }
+
+    const res = await fetch(`${baseUrl}${path}`, {
+      method: 'DELETE',
+      headers,
+    })
+
+    if (res.status === 401 && shouldRedirectToLogin()) {
+      setRedirectingFlag(true)
+      window.location.href = '/login'
+      throw new Error('Unauthorized')
+    }
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+    }
+
+    const text = await res.text()
+    return { data: text ? JSON.parse(text) : ({} as T) }
+  },
+
+  async patch<T = any>(path: string, body?: any): Promise<{ data: T }> {
+    if (isRedirectingToLogin()) {
+      throw new Error('Unauthorized')
+    }
+
+    const token = auth.getToken()
+    
+    if (!token) {
+      if (shouldRedirectToLogin()) {
+        setRedirectingFlag(true)
+        window.location.href = '/login'
+      }
+      throw new Error('Unauthorized')
+    }
+
+    const headers: Record<string, string> = { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    }
+
+    const res = await fetch(`${baseUrl}${path}`, {
+      method: 'PATCH',
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    })
+
+    if (res.status === 401 && shouldRedirectToLogin()) {
+      setRedirectingFlag(true)
+      window.location.href = '/login'
+      throw new Error('Unauthorized')
+    }
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+    }
+
+    const data = await res.json()
+    return { data }
+  },
+
+  async post<T = any>(path: string, body?: any): Promise<{ data: T }> {
     // Don't make API calls if we're already redirecting
     if (isRedirectingToLogin()) {
       throw new Error('Unauthorized')

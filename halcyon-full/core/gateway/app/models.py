@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Literal
 from datetime import datetime
 from uuid import UUID
 
@@ -75,3 +75,42 @@ class DashboardWithPanels(BaseModel):
     created_at: datetime
     updated_at: datetime
     panels: List[DashboardPanel] = Field(default_factory=list)
+
+
+# Alert types and models
+Severity = Literal["low", "medium", "high"]
+Status = Literal["open", "ack", "resolved"]  # Note: using "open" instead of "new" per Phase 6A+
+
+
+class ActionConfig(BaseModel):
+    type: str
+    config: Dict[str, Any]
+
+
+class AlertRuleIn(BaseModel):
+    name: str
+    description: Optional[str] = None
+    condition_json: Dict[str, Any]
+    severity: Severity = "medium"
+    actions_json: Optional[List[ActionConfig]] = None
+    enabled: bool = True
+
+
+class AlertRule(AlertRuleIn):
+    id: int
+    created_at: str
+    created_by: Optional[str] = None
+
+
+class Alert(BaseModel):
+    id: int
+    rule_id: int
+    entity_id: Optional[str] = None
+    message: str
+    severity: Severity
+    status: Status
+    created_at: str
+    acknowledged_at: Optional[str] = None
+    resolved_at: Optional[str] = None
+    acknowledged_by: Optional[str] = None
+    resolved_by: Optional[str] = None

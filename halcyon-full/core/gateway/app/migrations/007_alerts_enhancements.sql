@@ -20,8 +20,11 @@ DO $$ BEGIN
   ALTER TYPE alert_status ADD VALUE IF NOT EXISTS 'open';
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- Update existing 'new' status to 'open'
-UPDATE alerts SET status = 'open' WHERE status = 'new';
+COMMIT;
+
+-- Update existing 'new' status to 'open' (must be in separate transaction after enum is committed)
+BEGIN;
+UPDATE alerts SET status = 'open'::alert_status WHERE status = 'new'::alert_status;
 
 -- Create alert_comments table
 CREATE TABLE IF NOT EXISTS alert_comments (
@@ -49,7 +52,8 @@ CREATE TABLE IF NOT EXISTS alert_silences (
 
 CREATE INDEX IF NOT EXISTS idx_alert_silences_starts_at ON alert_silences(starts_at);
 CREATE INDEX IF NOT EXISTS idx_alert_silences_ends_at ON alert_silences(ends_at);
-CREATE INDEX IF NOT EXISTS idx_alert_silences_active ON alert_silences(starts_at, ends_at) WHERE starts_at <= NOW() AND ends_at >= NOW();
+-- Note: Active silences index uses timestamp comparison without NOW() for immutability
+-- Application should query: WHERE starts_at <= CURRENT_TIMESTAMP AND ends_at >= CURRENT_TIMESTAMP
 
 -- Create maintenance_windows table
 CREATE TABLE IF NOT EXISTS maintenance_windows (
@@ -65,7 +69,8 @@ CREATE TABLE IF NOT EXISTS maintenance_windows (
 
 CREATE INDEX IF NOT EXISTS idx_maintenance_windows_starts_at ON maintenance_windows(starts_at);
 CREATE INDEX IF NOT EXISTS idx_maintenance_windows_ends_at ON maintenance_windows(ends_at);
-CREATE INDEX IF NOT EXISTS idx_maintenance_windows_active ON maintenance_windows(starts_at, ends_at) WHERE starts_at <= NOW() AND ends_at >= NOW();
+-- Note: Active maintenance windows index uses timestamp comparison without NOW() for immutability
+-- Application should query: WHERE starts_at <= CURRENT_TIMESTAMP AND ends_at >= CURRENT_TIMESTAMP
 
 -- Extend alert_actions_log table
 ALTER TABLE alert_actions_log
