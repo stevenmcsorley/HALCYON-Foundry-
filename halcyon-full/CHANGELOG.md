@@ -2,6 +2,47 @@
 
 All notable changes to HALCYON Foundry Core will be documented in this file.
 
+## [v4b-ml-case-automation] - 2025-11-05
+
+### Added
+- **ML Scoring Engine** - Heuristic-based case priority and owner suggestions
+  - Priority scoring based on keyword analysis and severity mapping
+  - Owner suggestion based on historical resolution patterns
+  - Similar case discovery using Jaccard similarity on titles
+  - Model versioning (v1.0.0) for tracking ML model versions
+- **Case Insights UI Panel** - ML-generated suggestions display
+  - Suggested priority and owner with "Adopt" buttons (analyst/admin only)
+  - Related cases chips with navigation
+  - ML model version display
+- **Adoption API Endpoints** - REST and GraphQL mutations for adopting suggestions
+  - `PATCH /cases/{id}/adopt/priority` - Adopt priority suggestion
+  - `PATCH /cases/{id}/adopt/owner` - Adopt owner suggestion
+  - GraphQL: `adoptPrioritySuggestion`, `adoptOwnerSuggestion`
+- **ML Metrics** - Prometheus metrics for ML inference and adoption
+  - `ml_inference_total{model, status}` - Inference attempts (success/fail)
+  - `ml_suggestion_applied_total{type}` - Adoption count (priority/owner)
+  - `ml_inference_latency_seconds{model}` - Latency histogram
+  - `ml_model_version_info{model, version}` - Model version gauge
+- **Database Schema** - ML suggestion fields added to `cases` table
+  - `priority_suggestion` - Suggested priority level
+  - `owner_suggestion` - Suggested case owner
+  - `similar_case_ids` - JSONB array of related case IDs
+  - `ml_version` - ML model version used
+
+### Changed
+- Cases list now shows "AI Priority" badge indicator for suggested priorities
+- Case creation/update automatically triggers ML suggestion computation
+- Frontend store (`casesStore.ts`) includes snake_case to camelCase transformation for ML fields
+
+### Fixed
+- API response format now correctly handles ML suggestion fields (snake_case → camelCase)
+
+### Notes
+- ML suggestions are heuristic-based (not a trained model)
+- Owner suggestions require historical case data
+- All ML fields are nullable; safe to disable if needed
+- RBAC: Viewer can see Insights (read-only), Analyst/Admin can adopt
+
 ## [Phase 2] - 2024-11-04
 
 ### Added
