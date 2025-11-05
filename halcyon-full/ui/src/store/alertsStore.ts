@@ -38,12 +38,18 @@ export const useAlertsStore = create<State>((set, get) => ({
       const res = await api.get("/alerts", { params: { status, severity } });
       set({ alerts: res.data });
     } catch (error: any) {
-      // Silently handle 401/403 errors - user might not be authenticated yet
-      if (error?.message?.includes('Unauthorized') || error?.message?.includes('403')) {
+      // Silently handle expected errors - backend might not be configured or user not authenticated
+      const errorMsg = error?.message || '';
+      if (
+        errorMsg.includes('Unauthorized') || 
+        errorMsg.includes('403') || 
+        errorMsg.includes('404') ||
+        errorMsg.includes('Not Found')
+      ) {
         set({ alerts: [] });
         return;
       }
-      // Re-throw other errors
+      // Re-throw unexpected errors (5xx, network errors, etc.)
       throw error;
     }
   },
@@ -53,10 +59,17 @@ export const useAlertsStore = create<State>((set, get) => ({
       await api.post(`/alerts/${id}/ack`);
       await get().load();
     } catch (error: any) {
-      // Silently handle auth errors
-      if (error?.message?.includes('Unauthorized') || error?.message?.includes('403')) {
+      // Silently handle expected errors (auth, not found)
+      const errorMsg = error?.message || '';
+      if (
+        errorMsg.includes('Unauthorized') || 
+        errorMsg.includes('403') || 
+        errorMsg.includes('404') ||
+        errorMsg.includes('Not Found')
+      ) {
         return;
       }
+      // Re-throw unexpected errors (5xx, network errors)
       throw error;
     }
   },
@@ -65,10 +78,17 @@ export const useAlertsStore = create<State>((set, get) => ({
       await api.post(`/alerts/${id}/resolve`);
       await get().load();
     } catch (error: any) {
-      // Silently handle auth errors
-      if (error?.message?.includes('Unauthorized') || error?.message?.includes('403')) {
+      // Silently handle expected errors (auth, not found)
+      const errorMsg = error?.message || '';
+      if (
+        errorMsg.includes('Unauthorized') || 
+        errorMsg.includes('403') || 
+        errorMsg.includes('404') ||
+        errorMsg.includes('Not Found')
+      ) {
         return;
       }
+      // Re-throw unexpected errors (5xx, network errors)
       throw error;
     }
   },
