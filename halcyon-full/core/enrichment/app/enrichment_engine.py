@@ -116,37 +116,63 @@ async def run_reverse_geocode(action_config: Dict[str, Any], subject: Dict[str, 
     lon = attrs.get("longitude") or attrs.get("lng") or attrs.get("lon")
     
     if not lat or not lon:
-        raise ValueError("No latitude/longitude found in subject")
+        # Return error instead of raising
+        return {
+            "error": "No latitude/longitude found in subject",
+            "hint": "Subject should contain coordinates in attrs.latitude/lat and attrs.longitude/lon/lng"
+        }
     
     url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}"
     
     async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT, headers={"User-Agent": "HALCYON/1.0"}) as client:
-        response = await client.get(url)
-        response.raise_for_status()
-        return redact_secrets(response.json())
+        try:
+            response = await client.get(url)
+            response.raise_for_status()
+            return redact_secrets(response.json())
+        except Exception as e:
+            return {
+                "error": f"Reverse geocoding failed: {str(e)}",
+                "status": "error",
+                "exception_type": type(e).__name__
+            }
 
 
 async def run_keyword_match(action_config: Dict[str, Any], subject: Dict[str, Any]) -> Dict[str, Any]:
-    """Run keyword matching against subject attributes."""
+    """Run keyword matching against subject attributes and message."""
     keywords = action_config.get("keywords", [])
     if not keywords:
         return {"matched": [], "count": 0}
     
+    # Search in both attrs and message/description
     attrs = subject.get("attrs", {})
-    text = json.dumps(attrs).lower()
+    message = subject.get("message", "") or subject.get("description", "") or ""
+    
+    # Combine all text for searching
+    text = (json.dumps(attrs) + " " + message + " " + str(subject.get("id", ""))).lower()
     
     matched = [kw for kw in keywords if kw.lower() in text]
-    return {"matched": matched, "count": len(matched)}
+    return {
+        "matched": matched,
+        "count": len(matched),
+        "keywords_searched": keywords,
+        "matched_keywords": matched
+    }
 
 
 async def run_http_get(action_config: Dict[str, Any], subject: Dict[str, Any]) -> Dict[str, Any]:
     """Run HTTP GET request with templating."""
     if not ENRICH_ALLOW_HTTP:
-        raise ValueError("HTTP actions are disabled (ENRICH_ALLOW_HTTP=false)")
+        return {
+            "error": "HTTP actions are disabled (ENRICH_ALLOW_HTTP=false)",
+            "status": "disabled"
+        }
     
     url_template = action_config.get("url", "")
     if not url_template:
-        raise ValueError("No URL configured")
+        return {
+            "error": "No URL configured",
+            "status": "error"
+        }
     
     # Simple templating: ${alert.attrs.source}, ${case.title}, etc.
     url = url_template
@@ -158,20 +184,53 @@ async def run_http_get(action_config: Dict[str, Any], subject: Dict[str, Any]) -
     timeout = action_config.get("timeoutMs", DEFAULT_TIMEOUT * 1000) / 1000.0
     headers = action_config.get("headers", {})
     
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.get(url, headers=headers)
-        response.raise_for_status()
-        return redact_secrets(response.json())
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+        try:
+            response = await client.get(url, headers=headers)
+            response.raise_for_status()
+            # Try to parse as JSON, but return text if not JSON
+            try:
+                return redact_secrets(response.json())
+            except:
+                return {
+                    "status": "success",
+                    "status_code": response.status_code,
+                    "body": response.text[:1000]  # Limit response size
+                }
+        except httpx.ConnectError as e:
+            return {
+                "error": f"Cannot connect to {url}",
+                "detail": str(e),
+                "status": "connection_error",
+                "hint": "Check if the URL is correct and the service is reachable"
+            }
+        except httpx.TimeoutException:
+            return {
+                "error": f"Request to {url} timed out",
+                "status": "timeout"
+            }
+        except Exception as e:
+            return {
+                "error": f"HTTP GET failed: {str(e)}",
+                "status": "error",
+                "exception_type": type(e).__name__
+            }
 
 
 async def run_http_post(action_config: Dict[str, Any], subject: Dict[str, Any]) -> Dict[str, Any]:
     """Run HTTP POST request with templating."""
     if not ENRICH_ALLOW_HTTP:
-        raise ValueError("HTTP actions are disabled (ENRICH_ALLOW_HTTP=false)")
+        return {
+            "error": "HTTP actions are disabled (ENRICH_ALLOW_HTTP=false)",
+            "status": "disabled"
+        }
     
     url_template = action_config.get("url", "")
     if not url_template:
-        raise ValueError("No URL configured")
+        return {
+            "error": "No URL configured",
+            "status": "error"
+        }
     
     url = url_template
     for key, value in _flatten_dict(subject).items():
@@ -191,15 +250,43 @@ async def run_http_post(action_config: Dict[str, Any], subject: Dict[str, Any]) 
             body_str = body_str.replace(placeholder, str(value))
     body = json.loads(body_str)
     
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(url, headers=headers, json=body)
-        response.raise_for_status()
-        return redact_secrets(response.json())
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+        try:
+            response = await client.post(url, headers=headers, json=body)
+            response.raise_for_status()
+            # Try to parse as JSON, but return text if not JSON
+            try:
+                return redact_secrets(response.json())
+            except:
+                return {
+                    "status": "success",
+                    "status_code": response.status_code,
+                    "body": response.text[:1000]  # Limit response size
+                }
+        except httpx.ConnectError as e:
+            return {
+                "error": f"Cannot connect to {url}",
+                "detail": str(e),
+                "status": "connection_error",
+                "hint": "Check if the URL is correct and the service is reachable"
+            }
+        except httpx.TimeoutException:
+            return {
+                "error": f"Request to {url} timed out",
+                "status": "timeout"
+            }
+        except Exception as e:
+            return {
+                "error": f"HTTP POST failed: {str(e)}",
+                "status": "error",
+                "exception_type": type(e).__name__
+            }
 
 
 async def run_vt_hash_lookup(action_config: Dict[str, Any], subject: Dict[str, Any]) -> Dict[str, Any]:
     """Run VirusTotal hash lookup."""
     api_key = action_config.get("api_key") or os.getenv("VT_API_KEY")
+    logger.info(f"VirusTotal API key check: action_config has key={bool(action_config.get('api_key'))}, env var={bool(os.getenv('VT_API_KEY'))}")
     if not api_key:
         return {
             "error": "VirusTotal API key not configured",
@@ -209,13 +296,21 @@ async def run_vt_hash_lookup(action_config: Dict[str, Any], subject: Dict[str, A
     attrs = subject.get("attrs", {})
     hash_value = attrs.get("hash") or attrs.get("md5") or attrs.get("sha256")
     
-    # Also try to extract from subject ID
+    # Also try to extract from subject ID or message
     if not hash_value:
         subject_id = subject.get("id", "")
+        subject_text = subject.get("message", "") or subject.get("description", "") or ""
         import re
-        hash_match = re.search(r'\b[a-fA-F0-9]{32,64}\b', subject_id)
-        if hash_match:
-            hash_value = hash_match.group(0)
+        # Try SHA256 first (64 chars), then MD5 (32 chars)
+        sha256_match = re.search(r'\b[a-fA-F0-9]{64}\b', subject_id + " " + subject_text)
+        if sha256_match:
+            hash_value = sha256_match.group(0)
+            logger.info(f"Extracted SHA256 from subject: {hash_value[:16]}...")
+        else:
+            md5_match = re.search(r'\b[a-fA-F0-9]{32}\b', subject_id + " " + subject_text)
+            if md5_match:
+                hash_value = md5_match.group(0)
+                logger.info(f"Extracted MD5 from subject: {hash_value}")
     
     if not hash_value:
         return {
@@ -227,13 +322,53 @@ async def run_vt_hash_lookup(action_config: Dict[str, Any], subject: Dict[str, A
     params = {"apikey": api_key, "resource": hash_value}
     
     async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
-        response = await client.get(url, params=params)
-        response.raise_for_status()
-        result = response.json()
-        # Redact API key from response
-        if "apikey" in result:
-            result["apikey"] = "[REDACTED]"
-        return redact_secrets(result)
+        try:
+            response = await client.get(url, params=params)
+            
+            # Handle rate limiting (204 No Content)
+            if response.status_code == 204:
+                return {
+                    "error": "VirusTotal rate limit exceeded",
+                    "hint": "Free tier: 4 requests/min, 500/day. Please wait before retrying.",
+                    "status": "rate_limited"
+                }
+            
+            # Handle quota exceeded or other errors
+            if response.status_code != 200:
+                error_text = response.text[:200] if response.text else "Unknown error"
+                return {
+                    "error": f"VirusTotal API error: HTTP {response.status_code}",
+                    "detail": error_text,
+                    "status": "error"
+                }
+            
+            result = response.json()
+            
+            # Check for API errors in response
+            if isinstance(result, dict) and result.get("response_code") == 0:
+                return {
+                    "error": "Hash not found in VirusTotal database",
+                    "response_code": 0,
+                    "status": "not_found"
+                }
+            
+            # Redact API key from response
+            if "apikey" in result:
+                result["apikey"] = "[REDACTED]"
+            
+            return redact_secrets(result)
+            
+        except httpx.TimeoutException:
+            return {
+                "error": "VirusTotal API request timeout",
+                "status": "timeout"
+            }
+        except Exception as e:
+            return {
+                "error": f"VirusTotal lookup failed: {str(e)}",
+                "status": "error",
+                "exception_type": type(e).__name__
+            }
 
 
 async def run_whois(action_config: Dict[str, Any], subject: Dict[str, Any]) -> Dict[str, Any]:

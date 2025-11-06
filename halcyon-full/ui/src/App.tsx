@@ -11,13 +11,14 @@ import SavedQueriesPanel from './modules/saved/SavedQueriesPanel'
 import DashboardEditor from './modules/dashboards/DashboardEditor'
 import AlertsTab from './modules/alerts/AlertsTab'
 import CasesTab from './modules/cases/CasesTab'
+import { PlaybookStudio } from './modules/playbooks/PlaybookStudio'
 import { NotificationBell } from './components/NotificationBell'
 import { useAuthStore } from './store/authStore'
 import { useCasesStore } from './store/casesStore'
 import * as auth from './services/auth'
 import { Toast, subscribeToToast } from './components/Toast'
 
-type Tab = 'console' | 'saved' | 'dashboards' | 'alerts' | 'cases'
+type Tab = 'console' | 'saved' | 'dashboards' | 'alerts' | 'cases' | 'playbooks'
 
 function MainLayout() {
   const { user } = useAuthStore()
@@ -39,6 +40,7 @@ function MainLayout() {
     if (path === '/dashboards') return 'dashboards'
     if (path === '/alerts') return 'alerts'
     if (path === '/cases') return 'cases'
+    if (path === '/playbooks') return 'playbooks'
     return 'console'
   }
 
@@ -158,6 +160,18 @@ function MainLayout() {
             Cases
           </button>
         )}
+        {(hasRole('analyst') || hasRole('admin') || hasRole('viewer')) && (
+          <button
+            className={`px-3 py-2 text-sm font-medium ${
+              activeTab === 'playbooks'
+                ? 'border-b-2 border-white text-white'
+                : 'opacity-70 hover:opacity-100 text-white'
+            }`}
+            onClick={() => navigate('/playbooks')}
+          >
+            Playbooks
+          </button>
+        )}
       </div>
 
       <Routes>
@@ -218,6 +232,18 @@ function MainLayout() {
             (hasRole('analyst') || hasRole('admin') || hasRole('viewer')) ? (
               <div className="h-[calc(100vh-8rem)] overflow-auto">
                 <CasesTab />
+              </div>
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
+          path="/playbooks"
+          element={
+            (hasRole('analyst') || hasRole('admin') || hasRole('viewer')) ? (
+              <div className="h-[calc(100vh-8rem)] overflow-hidden">
+                <PlaybookStudio />
               </div>
             ) : (
               <Navigate to="/" replace />

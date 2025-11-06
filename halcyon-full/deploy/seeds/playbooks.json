@@ -5,7 +5,7 @@
       "name": "GeoIP Lookup",
       "kind": "geoip",
       "config": {
-        "provider": "freegeoip"
+        "provider": "ipapi"
       },
       "enabled": true
     },
@@ -18,11 +18,52 @@
     },
     {
       "id": "http-get-ioc",
-      "name": "IOC Feed Lookup",
+      "name": "IOC Feed Lookup (GET)",
       "kind": "http_get",
       "config": {
         "url": "https://ioc.example/api?q=${alert.attrs.indicator}",
         "timeoutMs": 3000
+      },
+      "enabled": true
+    },
+    {
+      "id": "http-post-webhook",
+      "name": "Webhook POST",
+      "kind": "http_post",
+      "config": {
+        "url": "https://webhook.example/api/endpoint",
+        "timeoutMs": 5000,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "alert_id": "${id}",
+          "message": "${message}",
+          "severity": "${severity}"
+        }
+      },
+      "enabled": true
+    },
+    {
+      "id": "vt-hash",
+      "name": "VirusTotal Hash Lookup",
+      "kind": "vt_hash_lookup",
+      "config": {},
+      "enabled": true
+    },
+    {
+      "id": "reverse-geocode",
+      "name": "Reverse Geocode",
+      "kind": "reverse_geocode",
+      "config": {},
+      "enabled": true
+    },
+    {
+      "id": "keyword-match",
+      "name": "Keyword Match",
+      "kind": "keyword_match",
+      "config": {
+        "keywords": ["malware", "suspicious", "attack", "breach"]
       },
       "enabled": true
     }
@@ -47,6 +88,53 @@
         {
           "kind": "attach_note",
           "text": "Enrichment summary attached by playbook."
+        }
+      ]
+    },
+    {
+      "id": "pb-enrich-all",
+      "name": "All Enrichments",
+      "version": "1.0.0",
+      "enabled": true,
+      "steps": [
+        {
+          "kind": "enrich",
+          "actionId": "geoip",
+          "onError": "continue"
+        },
+        {
+          "kind": "enrich",
+          "actionId": "whois",
+          "onError": "continue"
+        },
+        {
+          "kind": "enrich",
+          "actionId": "vt-hash",
+          "onError": "continue"
+        },
+        {
+          "kind": "enrich",
+          "actionId": "reverse-geocode",
+          "onError": "continue"
+        },
+        {
+          "kind": "enrich",
+          "actionId": "keyword-match",
+          "onError": "continue"
+        },
+        {
+          "kind": "enrich",
+          "actionId": "http-get-ioc",
+          "onError": "continue"
+        },
+        {
+          "kind": "enrich",
+          "actionId": "http-post-webhook",
+          "onError": "continue"
+        },
+        {
+          "kind": "attach_note",
+          "text": "Comprehensive enrichment completed. Review results above."
         }
       ]
     }

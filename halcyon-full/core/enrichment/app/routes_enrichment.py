@@ -60,10 +60,11 @@ def _extract_attrs_from_alert(alert_data: Dict[str, Any]) -> Dict[str, Any]:
     message = str(alert_data.get('message', '') or alert_data.get('msg', '') or '')
     entity_id = str(alert_data.get('entityId', '') or alert_data.get('entity_id', '') or '')
     fingerprint = str(alert_data.get('fingerprint', '') or '')
+    # Use FULL text, not truncated - we need the entire message for extraction
     text = f"{message} {entity_id} {fingerprint}"
     
-    # Debug logging
-    logger.info(f"Extracting attrs from alert: message='{message[:100]}', entity_id='{entity_id}', fingerprint='{fingerprint[:50]}', full_text='{text[:200]}'")
+    # Debug logging (truncated for logs, but use full text for extraction)
+    logger.info(f"Extracting attrs from alert: message_len={len(message)}, entity_id='{entity_id}', text_len={len(text)}")
     
     # Extract IP addresses - also check entity_id format like "ip-8.8.8.8"
     ip_pattern = r'\b(?:\d{1,3}\.){3}\d{1,3}\b'
@@ -85,16 +86,50 @@ def _extract_attrs_from_alert(alert_data: Dict[str, Any]) -> Dict[str, Any]:
             attrs["hostname"] = filtered_domains[0]
             logger.info(f"Extracted domain: {filtered_domains[0]}")
     
-    # Extract hash-like strings
-    hash_pattern = r'\b[a-fA-F0-9]{32,64}\b'
-    hashes = re.findall(hash_pattern, text)
-    if hashes:
-        attrs["hash"] = hashes[0]
-        if len(hashes[0]) == 32:
-            attrs["md5"] = hashes[0]
-        elif len(hashes[0]) == 64:
-            attrs["sha256"] = hashes[0]
-        logger.info(f"Extracted hash: {hashes[0]}")
+    # Extract hash-like strings (MD5: 32 chars, SHA256: 64 chars)
+    # Prefer longer hashes (SHA256) over shorter ones
+    md5_pattern = r'\b[a-fA-F0-9]{32}\b'
+    sha256_pattern = r'\b[a-fA-F0-9]{64}\b'
+    
+    sha256_hashes = re.findall(sha256_pattern, text)
+    md5_hashes = re.findall(md5_pattern, text)
+    
+    if sha256_hashes:
+        attrs["hash"] = sha256_hashes[0]
+        attrs["sha256"] = sha256_hashes[0]
+        logger.info(f"Extracted SHA256 hash: {sha256_hashes[0]}")
+    elif md5_hashes:
+        attrs["hash"] = md5_hashes[0]
+        attrs["md5"] = md5_hashes[0]
+        logger.info(f"Extracted MD5 hash: {md5_hashes[0]}")
+    
+    # Extract coordinates (lat, lon) from message
+    # Look for patterns like "39.03, -77.5" or "lat: 39.03 lon: -77.5"
+    coord_pattern = r'(?:lat|latitude)[:\s]+(-?\d+\.?\d*)[,\s]+(?:lon|lng|longitude)[:\s]+(-?\d+\.?\d*)'
+    coord_match = re.search(coord_pattern, text, re.IGNORECASE)
+    if coord_match:
+        attrs["latitude"] = float(coord_match.group(1))
+        attrs["lat"] = float(coord_match.group(1))
+        attrs["longitude"] = float(coord_match.group(2))
+        attrs["lon"] = float(coord_match.group(2))
+        attrs["lng"] = float(coord_match.group(2))
+        logger.info(f"Extracted coordinates: {coord_match.group(1)}, {coord_match.group(2)}")
+    else:
+        # Try simple pattern: "39.03, -77.5" (two decimal numbers, possibly with comma or space)
+        # Match patterns like: "39.03, -77.5" or "39.03 -77.5" or "(39.03, -77.5)"
+        simple_coord_pattern = r'\(?\s*(-?\d+\.\d+)\s*[,:]\s*(-?\d+\.\d+)\s*\)?'
+        simple_coord_match = re.search(simple_coord_pattern, text)
+        if simple_coord_match:
+            # Check if these look like coordinates (latitude: -90 to 90, longitude: -180 to 180)
+            lat_val = float(simple_coord_match.group(1))
+            lon_val = float(simple_coord_match.group(2))
+            if -90 <= lat_val <= 90 and -180 <= lon_val <= 180:
+                attrs["latitude"] = lat_val
+                attrs["lat"] = lat_val
+                attrs["longitude"] = lon_val
+                attrs["lon"] = lon_val
+                attrs["lng"] = lon_val
+                logger.info(f"Extracted coordinates: {lat_val}, {lon_val}")
     
     logger.info(f"Final extracted attrs: {attrs}")
     return attrs
@@ -205,6 +240,10 @@ async def run_action(
                     case_data = resp.json()
                     # Extract IPs/domains from case title/description
                     subject["attrs"] = _extract_attrs_from_case(case_data)
+                    # Also include title/description for actions that need the full text
+                    subject["title"] = case_data.get("title", "")
+                    subject["description"] = case_data.get("description", "")
+                    subject["message"] = case_data.get("description", "")  # Use description as message
         elif payload.subjectKind == "alert":
             async with httpx.AsyncClient(timeout=5.0) as client:
                 resp = await client.get(
@@ -215,6 +254,9 @@ async def run_action(
                     alert_data = resp.json()
                     # Extract IPs/domains from alert data
                     subject["attrs"] = _extract_attrs_from_alert(alert_data)
+                    # Also include message/description for actions that need the full text
+                    subject["message"] = alert_data.get("message", "") or alert_data.get("msg", "")
+                    subject["description"] = alert_data.get("description", "")
     except Exception as e:
         logger.warning(f"Failed to fetch subject from Gateway: {e}, using empty attrs")
         # Continue with empty attrs - enrichment actions should handle gracefully
@@ -362,6 +404,10 @@ async def run_playbook_endpoint(
                 if resp.status_code == 200:
                     case_data = resp.json()
                     subject["attrs"] = _extract_attrs_from_case(case_data)
+                    # Also include title/description for actions that need the full text
+                    subject["title"] = case_data.get("title", "")
+                    subject["description"] = case_data.get("description", "")
+                    subject["message"] = case_data.get("description", "")  # Use description as message
                     logger.info(f"Extracted attrs from case: {subject['attrs']}")
         elif payload.subjectKind == "alert":
             async with httpx.AsyncClient(timeout=5.0) as client:
@@ -373,6 +419,9 @@ async def run_playbook_endpoint(
                 if resp.status_code == 200:
                     alert_data = resp.json()
                     subject["attrs"] = _extract_attrs_from_alert(alert_data)
+                    # Also include message/description for actions that need the full text
+                    subject["message"] = alert_data.get("message", "") or alert_data.get("msg", "")
+                    subject["description"] = alert_data.get("description", "")
                     logger.info(f"Extracted attrs from alert: {subject['attrs']}")
                 elif resp.status_code == 404:
                     logger.error(f"Alert {payload.subjectId} not found - check if alert exists")
@@ -384,6 +433,9 @@ async def run_playbook_endpoint(
                         if resp2.status_code == 200:
                             alert_data = resp2.json()
                             subject["attrs"] = _extract_attrs_from_alert(alert_data)
+                            # Also include message/description
+                            subject["message"] = alert_data.get("message", "") or alert_data.get("msg", "")
+                            subject["description"] = alert_data.get("description", "")
                             logger.info(f"Extracted attrs from alert (no auth): {subject['attrs']}")
     except Exception as e:
         logger.error(f"Failed to fetch subject from Gateway: {e}", exc_info=True)

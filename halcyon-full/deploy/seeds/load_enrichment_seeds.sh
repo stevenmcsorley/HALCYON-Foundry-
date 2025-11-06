@@ -3,101 +3,39 @@
 
 set -e
 
-POSTGRES_CONTAINER="deploy-postgres-1"
-SEED_FILE="../deploy/seeds/playbooks.json"
-
 echo "Loading enrichment seed data..."
 
-# Read JSON and insert actions
-cat "$SEED_FILE" | docker compose -f ../deploy/docker-compose.yml exec -T postgres psql -U postgres -d halcyon <<EOF
--- Insert actions
-DO \$\$
-DECLARE
-    action_record RECORD;
-    playbook_record RECORD;
-    step_record RECORD;
-    actions_json JSONB;
-    playbooks_json JSONB;
-BEGIN
-    -- Read JSON file content (we'll use a temp table approach)
-    CREATE TEMP TABLE IF NOT EXISTS seed_data (data JSONB);
-    
-    -- Parse actions
-    FOR action_record IN 
-        SELECT * FROM jsonb_array_elements('[
-            {
-                "id": "geoip",
-                "name": "GeoIP Lookup",
-                "kind": "geoip",
-                "config": {"provider": "freegeoip"},
-                "enabled": true
-            },
-            {
-                "id": "whois",
-                "name": "WHOIS (domain/ip)",
-                "kind": "whois",
-                "config": {},
-                "enabled": true
-            },
-            {
-                "id": "http-get-ioc",
-                "name": "IOC Feed Lookup",
-                "kind": "http_get",
-                "config": {
-                    "url": "https://ioc.example/api?q=\${alert.attrs.indicator}",
-                    "timeoutMs": 3000
-                },
-                "enabled": true
-            }
-        ]'::jsonb) AS action
-    LOOP
-        INSERT INTO enrichment_actions (id, name, kind, config_json, enabled)
-        VALUES (
-            action_record->>'id',
-            action_record->>'name',
-            action_record->>'kind',
-            action_record->'config',
-            (action_record->>'enabled')::boolean
-        )
-        ON CONFLICT (id) DO UPDATE SET
-            name = EXCLUDED.name,
-            kind = EXCLUDED.kind,
-            config_json = EXCLUDED.config_json,
-            enabled = EXCLUDED.enabled;
-    END LOOP;
+# Load actions directly using SQL
+docker compose -f ../deploy/docker-compose.yml exec -T postgres psql -U postgres -d halcyon <<EOF
+-- Insert/Update enrichment actions
+INSERT INTO enrichment_actions (id, name, kind, config_json, enabled) VALUES
+('geoip', 'GeoIP Lookup', 'geoip', '{"provider": "ipapi"}'::jsonb, TRUE),
+('whois', 'WHOIS (domain/ip)', 'whois', '{}'::jsonb, TRUE),
+('http-get-ioc', 'IOC Feed Lookup (GET)', 'http_get', '{"url": "https://ioc.example/api?q=\${alert.attrs.indicator}", "timeoutMs": 3000}'::jsonb, TRUE),
+('http-post-webhook', 'Webhook POST', 'http_post', '{"url": "https://webhook.example/api/endpoint", "timeoutMs": 5000, "headers": {"Content-Type": "application/json"}, "body": {"alert_id": "\${id}", "message": "\${message}", "severity": "\${severity}"}}'::jsonb, TRUE),
+('vt-hash', 'VirusTotal Hash Lookup', 'vt_hash_lookup', '{}'::jsonb, TRUE),
+('reverse-geocode', 'Reverse Geocode', 'reverse_geocode', '{}'::jsonb, TRUE),
+('keyword-match', 'Keyword Match', 'keyword_match', '{"keywords": ["malware", "suspicious", "attack", "breach"]}'::jsonb, TRUE)
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    kind = EXCLUDED.kind,
+    config_json = EXCLUDED.config_json,
+    enabled = EXCLUDED.enabled;
 
-    -- Parse playbooks
-    FOR playbook_record IN
-        SELECT * FROM jsonb_array_elements('[
-            {
-                "id": "pb-enrich-geo-whois",
-                "name": "Geo + WHOIS",
-                "version": "1.0.0",
-                "enabled": true,
-                "steps": [
-                    {"kind": "enrich", "actionId": "geoip", "onError": "continue"},
-                    {"kind": "enrich", "actionId": "whois", "onError": "continue"},
-                    {"kind": "attach_note", "text": "Enrichment summary attached by playbook."}
-                ]
-            }
-        ]'::jsonb) AS playbook
-    LOOP
-        INSERT INTO playbooks (id, name, version, steps_json, enabled)
-        VALUES (
-            playbook_record->>'id',
-            playbook_record->>'name',
-            playbook_record->>'version',
-            playbook_record->'steps',
-            (playbook_record->>'enabled')::boolean
-        )
-        ON CONFLICT (id) DO UPDATE SET
-            name = EXCLUDED.name,
-            version = EXCLUDED.version,
-            steps_json = EXCLUDED.steps_json,
-            enabled = EXCLUDED.enabled;
-    END LOOP;
-END \$\$;
+-- Insert/Update playbooks
+INSERT INTO playbooks (id, name, version, steps_json, enabled) VALUES
+('pb-enrich-geo-whois', 'Geo + WHOIS', '1.0.0', '[
+    {"kind": "enrich", "actionId": "geoip", "onError": "continue"},
+    {"kind": "enrich", "actionId": "whois", "onError": "continue"},
+    {"kind": "attach_note", "text": "Enrichment summary attached by playbook."}
+]'::jsonb, TRUE)
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    version = EXCLUDED.version,
+    steps_json = EXCLUDED.steps_json,
+    enabled = EXCLUDED.enabled;
+
+SELECT '✅ Seed data loaded successfully!' as status;
 EOF
 
-echo "✅ Seed data loaded successfully!"
-
+echo "✅ All enrichment actions and playbooks loaded!"

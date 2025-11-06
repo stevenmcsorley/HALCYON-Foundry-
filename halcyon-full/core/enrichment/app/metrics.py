@@ -39,3 +39,34 @@ playbook_step_fail_total = Counter(
     "Total playbook step failures",
     ["playbook", "step"],
 )
+
+# Phase 7A: Playbook Studio metrics
+playbook_drafts_total = Counter(
+    "playbook_drafts_total",
+    "Total playbook drafts created",
+    ["status"],  # draft, published
+)
+
+playbook_publish_total = Counter(
+    "playbook_publish_total",
+    "Total playbook publishes",
+    ["user"],
+)
+
+playbook_rollback_total = Counter(
+    "playbook_rollback_total",
+    "Total playbook rollbacks",
+    ["user"],
+)
+
+playbook_test_runs_total = Counter(
+    "playbook_test_runs_total",
+    "Total playbook test runs",
+    ["result"],  # success, failed
+)
+
+playbook_ai_drafts_total = Counter(
+    "playbook_ai_drafts_total",
+    "Total AI-generated playbook drafts",
+    ["result"],  # success, failed
+)

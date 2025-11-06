@@ -6,6 +6,7 @@ from .logging import setup_logging
 from .health import router as health_router
 from .tracing import setup_tracing
 from .routes_enrichment import router as enrichment_router
+from .routes_playbooks import router as playbooks_router
 from .db import close_pool
 from .auth import auth_middleware
 
@@ -36,6 +37,7 @@ app.add_middleware(BaseHTTPMiddleware, dispatch=auth_middleware)
 
 app.include_router(health_router)
 app.include_router(enrichment_router)
+app.include_router(playbooks_router)
 
 
 @app.on_event("shutdown")
