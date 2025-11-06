@@ -36,6 +36,33 @@ HALCYON is designed from the ground up to be **domain-agnostic** and **multi-sce
 - **Playbooks & Enrichment**: Pluggable actions (GeoIP/WHOIS/VT/HTTP/etc.) usable for SOC, IoT, ops, fraud, compliance
 - **ML & Feedback**: Priority/owner suggestions + online learning adapt to any domain with labeled outcomes
 
+## 📸 Screenshots
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/stevenmcsorley/HALCYON-Foundry-/main/screenshots/screenshot-console.png" alt="HALCYON Console" width="800"/>
+  <p><em>Main Console - Map, Graph, Timeline, and Entity views</em></p>
+</div>
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/stevenmcsorley/HALCYON-Foundry-/main/screenshots/screenshot-playbook-studio.png" alt="Playbook Studio" width="800"/>
+  <p><em>Playbook Studio - Visual drag-and-drop playbook design</em></p>
+</div>
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/stevenmcsorley/HALCYON-Foundry-/main/screenshots/screenshot-alerts.png" alt="Alert Management" width="800"/>
+  <p><em>Alert Management - Intelligent routing and enrichment</em></p>
+</div>
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/stevenmcsorley/HALCYON-Foundry-/main/screenshots/screenshot-case-detail.png" alt="Case Management" width="800"/>
+  <p><em>Case Management - ML-powered prioritization, enrichment actions, and playbook execution</em></p>
+</div>
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/stevenmcsorley/HALCYON-Foundry-/main/screenshots/screenshot-dashboards.png" alt="Dashboards" width="800"/>
+  <p><em>Custom Dashboards - Create visual panels with saved queries</em></p>
+</div>
+
 ## 🚀 Key Features
 
 ### 🔌 **Connectors & Data Sources**
