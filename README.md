@@ -19,7 +19,28 @@ HALCYON is a **source-agnostic**, **extensible**, and **self-describing** platfo
 - **Playbook automation** with visual design studio
 - **Data enrichment** with built-in actions (GeoIP, WHOIS, VirusTotal, etc.)
 
+## 🌐 Multi-Scenario Capability
+
+HALCYON is designed from the ground up to be **domain-agnostic** and **multi-scenario** capable. The architecture is **schema-light** and **shape-aware**, enabling the same platform to handle diverse use cases without code changes:
+
+### Architecture Principles
+
+- **Connectors & Federation**: HTTP/Webhook/Kafka + virtual entities let you ingest anything (security logs, IoT telemetry, finance ticks, CRM events)
+- **Ontology & Shapes**: `entities[]` / `counts[]` / `metric` / `geo[]` / `items[]` makes panels reusable across domains
+- **Dashboards & Saved Queries**: Scenario-specific views without code changes
+- **Anomalies + Alerts + Cases**: Generic detection → triage → resolution pipeline
+- **Playbooks & Enrichment**: Pluggable actions (GeoIP/WHOIS/VT/HTTP/etc.) usable for SOC, IoT, ops, fraud, compliance
+- **ML & Feedback**: Priority/owner suggestions + online learning adapt to any domain with labeled outcomes
+
 ## 🚀 Key Features
+
+### 🔌 **Connectors & Data Sources**
+- **HTTP/Webhook** - Real-time ingestion from any HTTP endpoint
+- **Kafka** - High-throughput stream processing
+- **MQTT** - IoT device telemetry ingestion
+- **Virtual Entities** - Flexible schema mapping for any data source
+- **Federation** - Aggregate data from multiple external sources
+- **Plugin System** - Declarative plugin manifests for custom data sources
 
 ### 🗺️ **Console & Visualization**
 - **Interactive Map** - Geospatial visualization with MapLibre GL
@@ -27,6 +48,7 @@ HALCYON is a **source-agnostic**, **extensible**, and **self-describing** platfo
 - **Timeline View** - Temporal event playback and scrubbing
 - **List View** - Tabular data exploration with filtering
 - **Custom Dashboards** - Build and save custom visualization dashboards
+- **Shape-Aware Panels** - Reusable components across domains (entities[], counts[], metric, geo[], items[])
 
 ### 🚨 **Alert Management**
 - Alert ingestion from multiple sources
@@ -54,21 +76,30 @@ HALCYON is a **source-agnostic**, **extensible**, and **self-describing** platfo
 - **Import/Export** - Share playbooks as JSON
 
 ### 🔍 **Enrichment Engine**
-Built-in enrichment actions:
+Pluggable enrichment actions usable across all scenarios:
 - **GeoIP Lookup** - IP geolocation via ip-api.com
 - **WHOIS Lookup** - Domain and IP WHOIS information
 - **VirusTotal** - Hash and file reputation checks
 - **Reverse Geocode** - Convert coordinates to addresses
-- **Keyword Match** - Search for keywords in alert content
-- **HTTP GET/POST** - Webhook integrations
+- **Keyword Match** - Search for keywords in content
+- **HTTP GET/POST** - Webhook integrations for external APIs
 - **Multi-step Playbooks** - Chain enrichment actions together
+- **Custom Actions** - Extensible action framework for domain-specific enrichment
+
+### 🤖 **Anomaly Detection**
+- **Statistical Methods** - Z-score, moving averages, percentile-based detection
+- **ML Models** - Isolation Forest, clustering-based anomaly detection
+- **Rule-Based** - Custom threshold and pattern matching rules
+- **Time-Series Analysis** - Temporal anomaly detection for metrics
+- **Feedback Loop** - Continuous improvement through analyst feedback
 
 ### 🔐 **Security & Access Control**
-- Keycloak OIDC integration
-- JWT-based authentication
-- Role-based access control (RBAC)
-- Policy engine (OPA) for fine-grained permissions
-- Attribute-based access control (ABAC)
+- **Keycloak OIDC** - Enterprise identity provider integration
+- **JWT-based Authentication** - Secure token-based auth
+- **Role-based Access Control (RBAC)** - Viewer, Analyst, Admin roles
+- **Policy Engine (OPA)** - Fine-grained permissions via Rego policies
+- **Attribute-based Access Control (ABAC)** - Field-level data redaction
+- **Audit Trail** - Complete audit history for compliance
 
 ### 📊 **Observability**
 - Prometheus metrics on all services
@@ -171,32 +202,65 @@ Built-in enrichment actions:
 - **[Style Guide](halcyon-full/STYLEGUIDE.md)** - Frontend development guidelines
 - **[Auth README](halcyon-full/AUTH_README.md)** - Authentication setup and configuration
 
-## 🎯 Use Cases
+## 🎯 Use Cases & Scenarios
 
-### Security Operations
-- Ingest security alerts from multiple sources (SIEM, IDS, firewalls)
-- Automatically enrich alerts with threat intelligence
-- Route alerts to appropriate analysts based on rules
-- Create cases and track investigation progress
-- Use ML suggestions for priority and ownership
+HALCYON's flexible architecture supports multiple scenarios with the same core platform:
 
-### Network Operations
-- Monitor network telemetry and infrastructure metrics
-- Visualize network topology in graph view
-- Track network events in timeline view
-- Create dashboards for network health monitoring
+### 🔐 SecOps (SIEM/SOAR)
+**Flow**: Webhook syslog → IOC enrichment → Alert → Case → Playbook (block IP, open ticket) → Audit & metrics
 
-### Threat Intelligence
+- Ingest security alerts from multiple sources (SIEM, IDS, firewalls, endpoints)
+- Automatically enrich alerts with threat intelligence (GeoIP, WHOIS, VirusTotal)
+- Route alerts to appropriate analysts based on rules and ML suggestions
+- Create cases and track investigation progress with notes and attachments
+- Execute automated playbooks (block IP, create ticket, notify team)
+- Full audit trail and compliance reporting
+
+### 🏭 IoT / Industry 4.0
+**Flow**: MQTT/Kafka sensor streams → Z-score/Isolation Forest anomalies → Map/heatmap → Auto-notify ops → Case with checklist
+
+- Ingest sensor data from IoT devices via MQTT or Kafka
+- Detect anomalies using statistical methods (z-score, Isolation Forest)
+- Visualize sensor locations and metrics on interactive map
+- Automatically notify operations teams of anomalies
+- Create cases with checklists for maintenance and investigation
+- Real-time dashboards for factory floor monitoring
+
+### 💻 IT Ops / SRE
+**Flow**: Prometheus alerts → Routing preview + retries → Playbook to gather logs, open incident, post to Slack, create Jira
+
+- Integrate with Prometheus, Grafana, and other monitoring tools
+- Route alerts based on severity, service, and on-call schedules
+- Preview routing decisions before execution
+- Automatic retry with exponential backoff
+- Automated playbooks for common incidents (gather logs, restart service)
+- Integration with Slack, Jira, PagerDuty, and ticketing systems
+- Track MTTR and other SRE metrics
+
+### 💳 Fraud / Risk Management
+**Flow**: Transaction events → Rules + anomaly flags → Enrichment (device/IP, geo) → Case with analyst feedback loop
+
+- Ingest transaction events from payment systems
+- Apply rule-based and ML-based anomaly detection
+- Enrich transactions with device fingerprinting, IP geolocation, and risk scores
+- Create fraud cases with risk scoring and ML suggestions
+- Analyst feedback loop for continuous ML improvement
+- Compliance reporting and audit trails
+- Real-time fraud detection and prevention
+
+### 🔍 Threat Intelligence
 - Correlate indicators across multiple data sources
 - Enrich IPs, domains, and hashes with threat feeds
 - Visualize threat relationships in knowledge graph
 - Automate threat response with playbooks
+- Share intelligence across teams and organizations
 
-### Incident Response
-- Create cases for security incidents
-- Track investigation progress and notes
-- Use playbooks for automated response
-- Document lessons learned and feedback
+### 📊 Network Operations
+- Monitor network telemetry and infrastructure metrics
+- Visualize network topology in graph view
+- Track network events in timeline view
+- Create dashboards for network health monitoring
+- Detect network anomalies and performance issues
 
 ## 🛠️ Development
 
