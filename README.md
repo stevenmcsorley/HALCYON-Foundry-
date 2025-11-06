@@ -1,13 +1,13 @@
 <div align="center">
-  <img src="halcyon-full/ui/public/logo.png" alt="HALCYON Logo" width="200"/>
+  <img src="https://raw.githubusercontent.com/stevenmcsorley/HALCYON-Foundry-/main/halcyon-full/ui/public/logo.png" alt="HALCYON Logo" width="200"/>
   
   # HALCYON Foundry Core
   
   [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
   [![Version](https://img.shields.io/badge/version-v7a--playbook--studio-green.svg)](https://github.com/stevenmcsorley/HALCYON-Foundry-/releases)
   
-  **HALCYON Foundry Core** is a modular, extensible, high-availability platform for data fusion and real-time intelligence.
-</div> It ingests arbitrary data sources (telemetry, infrastructure, business, documents, people) and unifies them through a shared ontology, lineage graph, and visualization layer.
+  **HALCYON Foundry Core** is a modular, extensible, high-availability platform for data fusion and real-time intelligence. It ingests arbitrary data sources (telemetry, infrastructure, business, documents, people) and unifies them through a shared ontology, lineage graph, and visualization layer.
+</div>
 
 ## 🎯 What is HALCYON?
 
