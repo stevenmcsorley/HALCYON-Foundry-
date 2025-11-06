@@ -59,8 +59,18 @@ HALCYON is designed from the ground up to be **domain-agnostic** and **multi-sce
 </div>
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/stevenmcsorley/HALCYON-Foundry-/main/screenshots/screenshot-dashboards.png" alt="Dashboards" width="800"/>
+  <img src="https://raw.githubusercontent.com/stevenmcsorley/HALCYON-Foundry-/main/screenshots/screenshot-dashboard-with-queries.png" alt="Dashboards" width="800"/>
   <p><em>Custom Dashboards - Create visual panels with saved queries</em></p>
+</div>
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/stevenmcsorley/HALCYON-Foundry-/main/screenshots/queryedit.png" alt="Query Editor" width="800"/>
+  <p><em>Query Editor - GraphQL query builder with saved queries</em></p>
+</div>
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/stevenmcsorley/HALCYON-Foundry-/main/screenshots/enrichements.png" alt="Enrichments" width="800"/>
+  <p><em>Enrichment Actions - Built-in enrichment actions and playbook execution</em></p>
 </div>
 
 ## 🚀 Key Features
