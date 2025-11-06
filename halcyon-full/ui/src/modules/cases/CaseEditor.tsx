@@ -54,11 +54,12 @@ export default function CaseEditor({ isOpen, onClose, case: caseData, onSubmit }
     setError(null);
 
     try {
+      // Ensure priority and status are lowercase to match backend validation
       await onSubmit({
         title: title.trim(),
         description: description.trim() || null,
-        priority,
-        status,
+        priority: priority.toLowerCase(),
+        status: status.toLowerCase(),
         owner: owner.trim() || null,
       });
       onClose();

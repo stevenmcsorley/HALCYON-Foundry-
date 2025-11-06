@@ -12,6 +12,9 @@ type Query {
   alerts(status: String, severity: String): [Alert!]!
   cases(status: String, owner: String, priority: String, search: String, limit: Int, offset: Int): [Case!]!
   case(id: ID!): Case
+  feedbackByCase(caseId: ID!): [FeedbackEvent!]!
+  alertActions(alertId: ID!): [ActionAttempt!]!
+  alertRoutePreview(alertId: ID!): [RouteDecision!]!
 }
 
 type Mutation {
@@ -37,6 +40,9 @@ type Mutation {
   assignAlertsToCase(caseId: ID!, alertIds: [ID!]!): Boolean!
   adoptPrioritySuggestion(caseId: ID!): Case!
   adoptOwnerSuggestion(caseId: ID!): Case!
+  provideFeedback(input: ProvideFeedbackInput!): FeedbackEvent!
+  alertRetry(alertId: ID!, dest: String!): ActionAttempt!
+  alertRetryAllFailed(alertId: ID!): [ActionAttempt!]!
 }
 
 type Entity {
@@ -167,6 +173,26 @@ type Alert {
   resolvedBy: String
 }
 
+type ActionAttempt {
+  id: ID!
+  alertId: ID!
+  dest: String!
+  status: String!
+  httpStatus: Int
+  error: String
+  attempt: Int!
+  scheduledAt: String
+  sentAt: String
+  createdAt: String!
+}
+
+type RouteDecision {
+  dest: String!
+  wouldSend: Boolean!
+  reason: String!
+  suppressed: Boolean!
+}
+
 type Case {
   id: ID!
   title: String!
@@ -182,6 +208,7 @@ type Case {
   ownerSuggestion: String
   similarCaseIds: [Int!]
   mlVersion: String
+  feedback: [FeedbackEvent!]!
 }
 
 type CaseNote {
@@ -220,4 +247,36 @@ input CaseUpdateInput {
   status: String
   priority: String
   owner: String
+}
+
+enum FeedbackAction {
+  ACCEPTED
+  REJECTED
+  OVERRIDDEN
+}
+
+enum SuggestionType {
+  PRIORITY
+  OWNER
+}
+
+type FeedbackEvent {
+  id: ID!
+  caseId: ID!
+  suggestionType: SuggestionType!
+  suggestedValue: String!
+  finalValue: String
+  action: FeedbackAction!
+  score: Float
+  userId: String
+  createdAt: String!
+}
+
+input ProvideFeedbackInput {
+  caseId: ID!
+  suggestionType: SuggestionType!
+  suggestedValue: String!
+  finalValue: String
+  action: FeedbackAction!
+  score: Float
 }

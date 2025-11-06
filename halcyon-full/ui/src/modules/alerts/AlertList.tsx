@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { useAlertsStore } from "@/store/alertsStore";
+import { useAlertsStore, type Alert } from "@/store/alertsStore";
 import { useCasesStore } from "@/store/casesStore";
 import { AlertDialog } from "@/components/AlertDialog";
 import CaseEditor from "@/modules/cases/CaseEditor";
+import AlertDetailsDrawer from "./AlertDetailsDrawer";
 import { showToast } from "@/components/Toast";
 import { hasRole } from "@/services/auth";
 
@@ -16,6 +17,7 @@ export default function AlertList({ onCaseChipClick }: { onCaseChipClick?: (case
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [caseEditorOpen, setCaseEditorOpen] = useState(false);
   const [defaultCaseTitle, setDefaultCaseTitle] = useState("");
+  const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
   const canEdit = hasRole("analyst") || hasRole("admin");
 
   useEffect(() => {
@@ -187,24 +189,58 @@ export default function AlertList({ onCaseChipClick }: { onCaseChipClick?: (case
             </div>
           ) : (
             alerts.map((a) => (
-              <div key={a.id} className="p-3 flex items-center gap-3">
+              <div 
+                key={a.id} 
+                className="p-3 flex items-center gap-3 cursor-pointer hover:bg-white/5"
+                onClick={() => setSelectedAlert(a)}
+              >
                 {canEdit && (
                   <input
                     type="checkbox"
                     checked={selectedIds.has(a.id)}
-                    onChange={() => handleToggleSelect(a.id)}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      handleToggleSelect(a.id);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
                     className="w-4 h-4"
                   />
                 )}
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <div className="text-xs text-gray-400">
-                      {a.firstSeen ? new Date(a.firstSeen).toLocaleString() : new Date(a.createdAt).toLocaleString()}
+                      {(() => {
+                        try {
+                          const dateStr = a.firstSeen || a.createdAt;
+                          if (!dateStr) return "N/A";
+                          const date = new Date(dateStr);
+                          if (isNaN(date.getTime())) return "Invalid Date";
+                          return date.toLocaleString();
+                        } catch {
+                          return "Invalid Date";
+                        }
+                      })()}
                     </div>
                     {a.count && a.count > 1 && (
                       <div 
                         className="text-xs bg-yellow-600 px-2 py-0.5 rounded cursor-help"
-                        title={`Deduped ${a.count - 1} time(s) in mute window. First seen: ${a.firstSeen ? new Date(a.firstSeen).toLocaleString() : 'N/A'}, Last seen: ${a.lastSeen ? new Date(a.lastSeen).toLocaleString() : 'N/A'}`}
+                        title={`Deduped ${a.count - 1} time(s) in mute window. First seen: ${(() => {
+                          try {
+                            if (!a.firstSeen) return 'N/A';
+                            const date = new Date(a.firstSeen);
+                            return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString();
+                          } catch {
+                            return 'Invalid Date';
+                          }
+                        })()}, Last seen: ${(() => {
+                          try {
+                            if (!a.lastSeen) return 'N/A';
+                            const date = new Date(a.lastSeen);
+                            return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString();
+                          } catch {
+                            return 'Invalid Date';
+                          }
+                        })()}`}
                       >
                         ×{a.count}
                       </div>
@@ -239,20 +275,46 @@ export default function AlertList({ onCaseChipClick }: { onCaseChipClick?: (case
                     )}
                     {a.entityId && <span>entity: {a.entityId}</span>}
                     {a.lastSeen && a.count && a.count > 1 && (
-                      <span className="text-gray-600" title={`Last seen: ${new Date(a.lastSeen).toLocaleString()}`}>
-                        last: {new Date(a.lastSeen).toLocaleTimeString()}
+                      <span className="text-gray-600" title={`Last seen: ${(() => {
+                        try {
+                          const date = new Date(a.lastSeen);
+                          return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString();
+                        } catch {
+                          return 'Invalid Date';
+                        }
+                      })()}`}>
+                        last: {(() => {
+                          try {
+                            const date = new Date(a.lastSeen);
+                            return isNaN(date.getTime()) ? 'N/A' : date.toLocaleTimeString();
+                          } catch {
+                            return 'N/A';
+                          }
+                        })()}
                       </span>
                     )}
                   </div>
                 </div>
                 <div className="flex gap-2">
                   {a.status === "open" && (
-                    <button className="btn btn-sm" onClick={() => handleAck(a.id)}>
+                    <button 
+                      className="btn btn-sm" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAck(a.id);
+                      }}
+                    >
                       Acknowledge
                     </button>
                   )}
                   {(a.status === "open" || a.status === "ack") && (
-                    <button className="btn btn-sm" onClick={() => handleResolve(a.id)}>
+                    <button 
+                      className="btn btn-sm" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleResolve(a.id);
+                      }}
+                    >
                       Resolve
                     </button>
                   )}
@@ -280,6 +342,12 @@ export default function AlertList({ onCaseChipClick }: { onCaseChipClick?: (case
         message={errorDialog.message}
         variant="error"
       />
+      {selectedAlert && (
+        <AlertDetailsDrawer
+          alert={selectedAlert}
+          onClose={() => setSelectedAlert(null)}
+        />
+      )}
     </>
   );
 }

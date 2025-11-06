@@ -1,6 +1,7 @@
 """Repository layer for alert silences and maintenance windows."""
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+import json
 from asyncpg import Pool
 from .db import get_pool
 
@@ -18,19 +19,23 @@ async def list_active_silences(now: Optional[datetime] = None) -> List[Dict[str,
                ORDER BY created_at DESC""",
             now
         )
-        return [
-            {
+        result = []
+        for r in rows:
+            # Parse JSONB fields - asyncpg returns them as strings
+            match_json = r["match_json"]
+            if isinstance(match_json, str):
+                match_json = json.loads(match_json)
+            result.append({
                 "id": int(r["id"]),
                 "name": r["name"],
-                "match_json": r["match_json"],
+                "match_json": match_json,
                 "starts_at": r["starts_at"].isoformat() if r["starts_at"] else None,
                 "ends_at": r["ends_at"].isoformat() if r["ends_at"] else None,
                 "reason": r["reason"],
                 "created_by": r["created_by"],
                 "created_at": r["created_at"].isoformat() if r["created_at"] else None,
-            }
-            for r in rows
-        ]
+            })
+        return result
 
 
 async def list_active_maintenance(now: Optional[datetime] = None) -> List[Dict[str, Any]]:
@@ -46,19 +51,23 @@ async def list_active_maintenance(now: Optional[datetime] = None) -> List[Dict[s
                ORDER BY created_at DESC""",
             now
         )
-        return [
-            {
+        result = []
+        for r in rows:
+            # Parse JSONB fields - asyncpg returns them as strings
+            match_json = r["match_json"]
+            if isinstance(match_json, str):
+                match_json = json.loads(match_json)
+            result.append({
                 "id": int(r["id"]),
                 "name": r["name"],
-                "match_json": r["match_json"],
+                "match_json": match_json,
                 "starts_at": r["starts_at"].isoformat() if r["starts_at"] else None,
                 "ends_at": r["ends_at"].isoformat() if r["ends_at"] else None,
                 "reason": r["reason"],
                 "created_by": r["created_by"],
                 "created_at": r["created_at"].isoformat() if r["created_at"] else None,
-            }
-            for r in rows
-        ]
+            })
+        return result
 
 
 async def list_silences(include_expired: bool = False) -> List[Dict[str, Any]]:
@@ -80,19 +89,23 @@ async def list_silences(include_expired: bool = False) -> List[Dict[str, Any]]:
                    ORDER BY starts_at ASC""",
                 now
             )
-        return [
-            {
+        result = []
+        for r in rows:
+            # Parse JSONB fields - asyncpg returns them as strings
+            match_json = r["match_json"]
+            if isinstance(match_json, str):
+                match_json = json.loads(match_json)
+            result.append({
                 "id": int(r["id"]),
                 "name": r["name"],
-                "match_json": r["match_json"],
+                "match_json": match_json,
                 "starts_at": r["starts_at"].isoformat() if r["starts_at"] else None,
                 "ends_at": r["ends_at"].isoformat() if r["ends_at"] else None,
                 "reason": r["reason"],
                 "created_by": r["created_by"],
                 "created_at": r["created_at"].isoformat() if r["created_at"] else None,
-            }
-            for r in rows
-        ]
+            })
+        return result
 
 
 async def list_maintenance(include_expired: bool = False) -> List[Dict[str, Any]]:
@@ -114,19 +127,23 @@ async def list_maintenance(include_expired: bool = False) -> List[Dict[str, Any]
                    ORDER BY starts_at ASC""",
                 now
             )
-        return [
-            {
+        result = []
+        for r in rows:
+            # Parse JSONB fields - asyncpg returns them as strings
+            match_json = r["match_json"]
+            if isinstance(match_json, str):
+                match_json = json.loads(match_json)
+            result.append({
                 "id": int(r["id"]),
                 "name": r["name"],
-                "match_json": r["match_json"],
+                "match_json": match_json,
                 "starts_at": r["starts_at"].isoformat() if r["starts_at"] else None,
                 "ends_at": r["ends_at"].isoformat() if r["ends_at"] else None,
                 "reason": r["reason"],
                 "created_by": r["created_by"],
                 "created_at": r["created_at"].isoformat() if r["created_at"] else None,
-            }
-            for r in rows
-        ]
+            })
+        return result
 
 
 async def create_silence(
@@ -140,11 +157,14 @@ async def create_silence(
     """Create a new silence."""
     pool = await get_pool()
     async with pool.acquire() as conn:
+        # asyncpg requires explicit JSON string for JSONB, or use set_type_codec
+        # Convert dict to JSON string for JSONB column
+        match_json_str = json.dumps(match_json)
         row = await conn.fetchrow(
             """INSERT INTO alert_silences(name, match_json, starts_at, ends_at, reason, created_by)
-               VALUES ($1, $2, $3, $4, $5, $6)
+               VALUES ($1, $2::jsonb, $3, $4, $5, $6)
                RETURNING id""",
-            name, match_json, starts_at, ends_at, reason, created_by
+            name, match_json_str, starts_at, ends_at, reason, created_by or "system"
         )
         return int(row["id"])
 
@@ -160,11 +180,14 @@ async def create_maintenance(
     """Create a new maintenance window."""
     pool = await get_pool()
     async with pool.acquire() as conn:
+        # asyncpg requires explicit JSON string for JSONB
+        # Convert dict to JSON string for JSONB column
+        match_json_str = json.dumps(match_json)
         row = await conn.fetchrow(
             """INSERT INTO maintenance_windows(name, match_json, starts_at, ends_at, reason, created_by)
-               VALUES ($1, $2, $3, $4, $5, $6)
+               VALUES ($1, $2::jsonb, $3, $4, $5, $6)
                RETURNING id""",
-            name, match_json, starts_at, ends_at, reason, created_by
+            name, match_json_str, starts_at, ends_at, reason, created_by or "system"
         )
         return int(row["id"])
 

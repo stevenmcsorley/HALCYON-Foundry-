@@ -52,9 +52,20 @@ export const useSuppressStore = create<SuppressStore>((set, get) => ({
       const response = await api.get(`/silences?include_expired=${includeExpired}`);
       set({ silences: response.data, loading: false });
     } catch (err: any) {
-      // Silent 404/401/403 handling (expected on cold start or no permissions)
-      if (err?.status === 404 || err?.status === 401 || err?.status === 403) {
+      const msg = err?.message || '';
+      // Only silently handle 404 - 401/403 should show errors
+      if (msg.includes('404') || msg.includes('Not Found')) {
         set({ silences: [], loading: false, error: null });
+      } else if (msg.includes('401') || msg.includes('Unauthorized')) {
+        // Try refresh token
+        try {
+          const { refresh } = await import('@/services/auth');
+          await refresh();
+          const retry = await api.get(`/silences?include_expired=${includeExpired}`);
+          set({ silences: retry.data, loading: false });
+        } catch {
+          set({ error: 'Unauthorized - please log in again', loading: false });
+        }
       } else {
         set({ error: err?.message || 'Failed to load silences', loading: false });
       }
@@ -95,9 +106,20 @@ export const useSuppressStore = create<SuppressStore>((set, get) => ({
       const response = await api.get(`/maintenance?include_expired=${includeExpired}`);
       set({ maintenance: response.data, loading: false });
     } catch (err: any) {
-      // Silent 404/401/403 handling
-      if (err?.status === 404 || err?.status === 401 || err?.status === 403) {
+      const msg = err?.message || '';
+      // Only silently handle 404 - 401/403 should show errors
+      if (msg.includes('404') || msg.includes('Not Found')) {
         set({ maintenance: [], loading: false, error: null });
+      } else if (msg.includes('401') || msg.includes('Unauthorized')) {
+        // Try refresh token
+        try {
+          const { refresh } = await import('@/services/auth');
+          await refresh();
+          const retry = await api.get(`/maintenance?include_expired=${includeExpired}`);
+          set({ maintenance: retry.data, loading: false });
+        } catch {
+          set({ error: 'Unauthorized - please log in again', loading: false });
+        }
       } else {
         set({ error: err?.message || 'Failed to load maintenance windows', loading: false });
       }

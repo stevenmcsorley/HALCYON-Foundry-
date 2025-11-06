@@ -2,8 +2,10 @@
   "realm": "halcyon-dev",
   "enabled": true,
   "requiredActions": [],
-  "accessTokenLifespan": 300,
-  "accessTokenLifespanForImplicitFlow": 900,
+  "accessTokenLifespan": 86400,
+  "accessTokenLifespanForImplicitFlow": 86400,
+  "ssoSessionMaxLifespan": 86400,
+  "ssoSessionIdleTimeout": 86400,
   "roles": {
     "realm": [
       {

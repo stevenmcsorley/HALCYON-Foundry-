@@ -161,6 +161,11 @@ export const api = {
       throw new Error('Unauthorized')
     }
 
+    if (res.status === 403) {
+      const errorData = await res.json().catch(() => ({ detail: res.statusText }))
+      throw new Error(`HTTP ${res.status}: ${errorData.detail || res.statusText}`)
+    }
+
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}: ${res.statusText}`)
     }

@@ -1,0 +1,55 @@
+{
+  "actions": [
+    {
+      "id": "geoip",
+      "name": "GeoIP Lookup",
+      "kind": "geoip",
+      "config": {
+        "provider": "freegeoip"
+      },
+      "enabled": true
+    },
+    {
+      "id": "whois",
+      "name": "WHOIS (domain/ip)",
+      "kind": "whois",
+      "config": {},
+      "enabled": true
+    },
+    {
+      "id": "http-get-ioc",
+      "name": "IOC Feed Lookup",
+      "kind": "http_get",
+      "config": {
+        "url": "https://ioc.example/api?q=${alert.attrs.indicator}",
+        "timeoutMs": 3000
+      },
+      "enabled": true
+    }
+  ],
+  "playbooks": [
+    {
+      "id": "pb-enrich-geo-whois",
+      "name": "Geo + WHOIS",
+      "version": "1.0.0",
+      "enabled": true,
+      "steps": [
+        {
+          "kind": "enrich",
+          "actionId": "geoip",
+          "onError": "continue"
+        },
+        {
+          "kind": "enrich",
+          "actionId": "whois",
+          "onError": "continue"
+        },
+        {
+          "kind": "attach_note",
+          "text": "Enrichment summary attached by playbook."
+        }
+      ]
+    }
+  ]
+}
+

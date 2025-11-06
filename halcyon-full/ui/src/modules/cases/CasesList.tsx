@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Case, CaseStatus, CasePriority, useCasesStore } from "@/store/casesStore";
+import ConfidenceBadge from "@/components/ConfidenceBadge";
 
 interface CasesListProps {
   onSelect: (caseData: Case | null) => void;
@@ -108,8 +109,9 @@ export default function CasesList({ onSelect }: CasesListProps) {
                 {caseData.prioritySuggestion && caseData.prioritySuggestion !== caseData.priority && (
                   <>
                     <span className="text-white/40">•</span>
-                    <span className="text-purple-400" title="AI suggested priority">
+                    <span className="text-purple-400 flex items-center gap-1" title="AI suggested priority">
                       AI: {caseData.prioritySuggestion}
+                      <ConfidenceBadge score={(caseData as any).priorityScore} />
                     </span>
                   </>
                 )}

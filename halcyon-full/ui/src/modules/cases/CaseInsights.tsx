@@ -2,6 +2,8 @@ import { Case, useCasesStore } from "@/store/casesStore";
 import { hasRole } from "@/services/auth";
 import { showToast } from "@/components/Toast";
 import { useState } from "react";
+import ConfidenceBadge from "@/components/ConfidenceBadge";
+import InsightsFeedback from "./InsightsFeedback";
 
 interface CaseInsightsProps {
   caseData: Case;
@@ -69,39 +71,63 @@ export default function CaseInsights({ caseData, onUpdate }: CaseInsightsProps) 
       <h3 className="text-lg font-semibold text-white mb-4">Insights (AI)</h3>
       <div className="space-y-4">
         {caseData.prioritySuggestion && (
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm text-white/60 mb-1">Suggested Priority</div>
-              <div className={`text-lg font-medium ${getPriorityColor(caseData.prioritySuggestion)}`}>
-                {caseData.prioritySuggestion}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div>
+                  <div className="text-sm text-white/60 mb-1">Suggested Priority</div>
+                  <div className={`text-lg font-medium ${getPriorityColor(caseData.prioritySuggestion)}`}>
+                    {caseData.prioritySuggestion}
+                  </div>
+                </div>
+                <ConfidenceBadge score={(caseData as any).priorityScore} />
               </div>
+              {canEdit && (
+                <button
+                  onClick={handleAdoptPriority}
+                  disabled={loading === "priority"}
+                  className="px-3 py-1.5 text-sm bg-teal-600 hover:bg-teal-700 rounded text-white disabled:opacity-50"
+                >
+                  {loading === "priority" ? "Adopting..." : "Adopt"}
+                </button>
+              )}
             </div>
-            {canEdit && (
-              <button
-                onClick={handleAdoptPriority}
-                disabled={loading === "priority"}
-                className="px-3 py-1.5 text-sm bg-teal-600 hover:bg-teal-700 rounded text-white disabled:opacity-50"
-              >
-                {loading === "priority" ? "Adopting..." : "Adopt"}
-              </button>
+            {import.meta.env.VITE_ENABLE_ML_FEEDBACK !== "false" && (
+              <InsightsFeedback
+                caseData={caseData}
+                suggestionType="priority"
+                suggestedValue={caseData.prioritySuggestion}
+                score={(caseData as any).priorityScore}
+                onFeedbackSubmitted={onUpdate}
+              />
             )}
           </div>
         )}
 
         {caseData.ownerSuggestion && (
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm text-white/60 mb-1">Suggested Owner</div>
-              <div className="text-lg text-white/90">{caseData.ownerSuggestion}</div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-white/60 mb-1">Suggested Owner</div>
+                <div className="text-lg text-white/90">{caseData.ownerSuggestion}</div>
+              </div>
+              {canEdit && (
+                <button
+                  onClick={handleAdoptOwner}
+                  disabled={loading === "owner"}
+                  className="px-3 py-1.5 text-sm bg-teal-600 hover:bg-teal-700 rounded text-white disabled:opacity-50"
+                >
+                  {loading === "owner" ? "Adopting..." : "Adopt"}
+                </button>
+              )}
             </div>
-            {canEdit && (
-              <button
-                onClick={handleAdoptOwner}
-                disabled={loading === "owner"}
-                className="px-3 py-1.5 text-sm bg-teal-600 hover:bg-teal-700 rounded text-white disabled:opacity-50"
-              >
-                {loading === "owner" ? "Adopting..." : "Adopt"}
-              </button>
+            {import.meta.env.VITE_ENABLE_ML_FEEDBACK !== "false" && (
+              <InsightsFeedback
+                caseData={caseData}
+                suggestionType="owner"
+                suggestedValue={caseData.ownerSuggestion}
+                onFeedbackSubmitted={onUpdate}
+              />
             )}
           </div>
         )}

@@ -65,7 +65,10 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8091
     environment:
       ONTOLOGY_BASE_URL: http://ontology:8081
-    depends_on: [ ontology ]
+      GATEWAY_URL: http://gateway:8088
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-dev}@postgres:5432/halcyon
+      POSTGRES_URL: postgresql://postgres:${POSTGRES_PASSWORD:-dev}@postgres:5432/halcyon
+    depends_on: [ postgres, ontology, gateway ]
     ports: [ "8091:8091" ]
 
   # OPA serving policies from local bundle

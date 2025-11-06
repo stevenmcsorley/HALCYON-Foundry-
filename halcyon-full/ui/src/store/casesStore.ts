@@ -82,11 +82,28 @@ export const useCasesStore = create<CasesState>((set, get) => ({
       set({ items: transformed });
     } catch (e: any) {
       const msg = e?.message || '';
-      if (msg.includes('401') || msg.includes('403') || msg.includes('404') || msg.includes('Unauthorized') || msg.includes('Not Found')) {
-        set({ items: [] }); // silent expected errors
+      // Only silently handle 404 (not found) - 401/403 should be shown as errors
+      if (msg.includes('404') || msg.includes('Not Found')) {
+        set({ items: [] }); // silent for 404 (no cases yet)
         return;
       }
-      throw e; // let AlertDialog handle 5xx/network
+      // For 401/403, try to refresh token first, then throw if still failing
+      if (msg.includes('401') || msg.includes('Unauthorized')) {
+        try {
+          const { refresh } = await import('@/services/auth');
+          await refresh();
+          // Retry once after refresh
+          const retry = await api.get<any[]>("/cases", { params: q });
+          const transformed = (retry.data ?? []).map(transformCase);
+          set({ items: transformed });
+          return;
+        } catch {
+          // Refresh failed, will redirect to login
+          throw e;
+        }
+      }
+      // 403 and other errors should be thrown to show AlertDialog
+      throw e;
     } finally { 
       set({ loading: false }); 
     }
@@ -106,7 +123,13 @@ export const useCasesStore = create<CasesState>((set, get) => ({
   },
 
   create: async (payload) => {
-    const res = await api.post<any>("/cases", payload);
+    // Normalize enum values to lowercase to match backend validation
+    const normalized = {
+      ...payload,
+      priority: payload.priority?.toLowerCase(),
+      status: payload.status?.toLowerCase(),
+    };
+    const res = await api.post<any>("/cases", normalized);
     const transformed = transformCase(res.data);
     // Refresh list after create
     await get().list();
@@ -115,7 +138,13 @@ export const useCasesStore = create<CasesState>((set, get) => ({
 
   update: async (id, payload) => {
     try {
-      const res = await api.patch<any>(`/cases/${id}`, payload);
+      // Normalize enum values to lowercase to match backend validation
+      const normalized = {
+        ...payload,
+        priority: payload.priority?.toLowerCase(),
+        status: payload.status?.toLowerCase(),
+      };
+      const res = await api.patch<any>(`/cases/${id}`, normalized);
       const transformed = transformCase(res.data);
       // Update in list if present
       set(state => ({
@@ -200,3 +229,5 @@ export const useCasesStore = create<CasesState>((set, get) => ({
     }
   },
 }));
+
+

@@ -77,14 +77,36 @@ async def metrics():
 @router.get("/auth/user")
 async def get_current_user(request: Request):
     """Get current authenticated user information."""
+    # Check if user was set by middleware (which runs even for /auth/user, but we need to check)
     user = getattr(request.state, "user", None)
     if not user:
+        # If no user in state, try to extract from Authorization header directly
+        from .auth import verify_token, extract_roles
         from .config import settings
-        if settings.dev_mode:
-            return {
-                "sub": "dev-user",
-                "email": "dev@halcyon.local",
-                "roles": settings.default_roles,
-            }
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1]
+            try:
+                payload = await verify_token(token)
+                if payload:
+                    roles = extract_roles(payload)
+                    user = {
+                        "sub": payload.get("sub"),
+                        "email": payload.get("email"),
+                        "roles": roles or settings.default_roles,
+                    }
+                    # Store in state for consistency
+                    request.state.user = user
+            except Exception:
+                pass  # Will fall through to dev_mode or 401
+        
+        if not user:
+            if settings.dev_mode:
+                return {
+                    "sub": "dev-user",
+                    "email": "dev@halcyon.local",
+                    "roles": settings.default_roles,
+                }
+            raise HTTPException(status_code=401, detail="Not authenticated")
     return user

@@ -83,6 +83,25 @@ alert_retry_exhausted_total = Counter(
     ["dest"],  # dest: "slack" or "webhook"
 )
 
+# Phase 6B: Delivery Trace & Routing UX metrics
+alert_actions_preview_total = Counter(
+    "alert_actions_preview_total",
+    "Routing preview requests",
+    ["result"],  # result: "would_send" or "suppressed"
+)
+
+alert_manual_retry_total = Counter(
+    "alert_manual_retry_total",
+    "Manual retry requests",
+    ["dest"],  # dest: "slack" or "webhook"
+)
+
+alert_action_next_retry_seconds = Gauge(
+    "alert_action_next_retry_seconds",
+    "Seconds until next scheduled retry",
+    ["dest", "alert_id"],  # dest: "slack" or "webhook"
+)
+
 # PR-4A: Cases metrics
 cases_created_total = Counter(
     "cases_created_total",
@@ -123,4 +142,23 @@ ml_model_version_info = Gauge(
     "ml_model_version_info",
     "ML model version info",
     ["model", "version"],
+)
+
+# PR-4C: ML Feedback metrics
+ml_suggestion_feedback_total = Counter(
+    "ml_suggestion_feedback_total",
+    "Total ML suggestion feedback events",
+    ["type", "action"],  # type: "priority" or "owner", action: "accepted", "rejected", "overridden"
+)
+
+ml_online_update_total = Counter(
+    "ml_online_update_total",
+    "Total online learning weight updates",
+    ["feature"],  # feature: "kw_critical", "owner_alice_history", etc.
+)
+
+ml_suggestion_calibration = Histogram(
+    "ml_suggestion_calibration",
+    "ML suggestion calibration: score vs accepted (0=rejected, 1=accepted)",
+    buckets=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
 )

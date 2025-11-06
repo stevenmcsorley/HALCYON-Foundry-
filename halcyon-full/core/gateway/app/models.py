@@ -94,12 +94,18 @@ class AlertRuleIn(BaseModel):
     severity: Severity = "medium"
     actions_json: Optional[List[ActionConfig]] = None
     enabled: bool = True
+    # Phase 6A+ fields
+    fingerprint_template: Optional[str] = None
+    correlation_keys: Optional[List[str]] = None
+    mute_seconds: int = 0
+    route: Optional[Dict[str, Any]] = None
 
 
 class AlertRule(AlertRuleIn):
     id: int
     created_at: str
     created_by: Optional[str] = None
+    route: Optional[Dict[str, Any]] = None  # Phase 6B: route JSONB field
 
 
 class Alert(BaseModel):

@@ -1,5 +1,5 @@
 """GraphQL resolvers for Cases & Ownership."""
-from ariadne import QueryType, MutationType
+from ariadne import QueryType, MutationType, ObjectType
 from .db import get_pool
 from .repo_cases import (
     create_case, update_case, get_case, list_cases,
@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 cases_query = QueryType()
 cases_mutation = MutationType()
+case_type = ObjectType("Case")
 
 
 async def apply_ml_suggestions(conn, case_row):
@@ -28,7 +29,7 @@ async def apply_ml_suggestions(conn, case_row):
         # Get severity from case if available (from alerts)
         severity = None  # Could be extracted from linked alerts if needed
         
-        suggestions = score_case(
+        suggestions = await score_case(
             case_row["title"],
             severity,
             history,
@@ -81,6 +82,27 @@ async def resolve_case(obj, info, id: int):
     async with pool.acquire() as conn:
         case = await get_case(conn, id)
         return case
+
+
+@case_type.field("feedback")
+async def resolve_case_feedback(case, info):
+    """Get feedback events for a case (Case.feedback field resolver)."""
+    case_id = case.get("id") if isinstance(case, dict) else getattr(case, "id", None)
+    if not case_id:
+        return []
+    
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        feedback = await get_feedback_by_case(conn, case_id)
+        # Convert to GraphQL enum format
+        return [
+            {
+                **f,
+                "suggestionType": f["suggestion_type"].upper(),
+                "action": f["action"].upper(),
+            }
+            for f in feedback
+        ]
 
 
 @cases_mutation.field("createCase")

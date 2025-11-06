@@ -77,8 +77,7 @@ async def resolve_upsert_relationships(obj, info, input):
 
 async def _run_rules_and_publish(entities):
     """Evaluate alert rules against entities and publish alerts."""
-    if not settings.actions_enable:
-        return
+    # Always evaluate rules - actions_enable is checked in actions.py if needed
 
     rules = await list_rules()
     for r in rules:

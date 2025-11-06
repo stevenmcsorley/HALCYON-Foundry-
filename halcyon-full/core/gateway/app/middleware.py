@@ -2,9 +2,13 @@ from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from typing import Callable
+import re
+import logging
 from .auth import verify_token, extract_roles
 from .config import settings
 from .metrics import auth_success_total, auth_failure_total
+
+logger = logging.getLogger("gateway.middleware")
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -15,9 +19,27 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS":
             return await call_next(request)
         
-        # Skip auth for health endpoints and /auth/user (will handle separately)
-        if request.url.path in ["/health", "/health/ready", "/metrics", "/auth/user"]:
+        # Skip auth for health endpoints and metrics (but NOT /auth/user - we need to process it)
+        # Also skip auth for GET /alerts/{id} - it's a public read-only endpoint for enrichment service
+        path = request.url.path
+        if path in ["/health", "/health/ready", "/metrics"]:
             return await call_next(request)
+        
+        # Allow GET /alerts/{id} without auth (for enrichment service)
+        # Match pattern: /alerts/ followed by digits only (no trailing slash or query params)
+        if request.method == "GET":
+            # Strip query string for matching
+            path_only = path.split('?')[0]
+            logger.warning(f"MIDDLEWARE: Checking GET {path_only} for /alerts/{{id}} pattern")
+            # Match /alerts/{numeric_id} exactly
+            if re.match(r'^/alerts/\d+$', path_only):
+                logger.warning(f"MIDDLEWARE: MATCH! Allowing public access to {path_only}")
+                # This is /alerts/{id}, allow public read access
+                # Set a default user so the route handler doesn't fail
+                request.state.user = {"sub": "enrichment-service", "roles": ["viewer"]}
+                return await call_next(request)
+            else:
+                logger.warning(f"MIDDLEWARE: No match for {path_only}")
 
         # Extract token from Authorization header
         auth_header = request.headers.get("Authorization", "")

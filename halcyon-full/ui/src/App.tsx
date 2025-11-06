@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { MapPanel } from './modules/map'
 import { GraphPanel } from './modules/graph'
 import { ListPanel } from './modules/list'
@@ -18,19 +19,30 @@ import { Toast, subscribeToToast } from './components/Toast'
 
 type Tab = 'console' | 'saved' | 'dashboards' | 'alerts' | 'cases'
 
-export default function App() {
-  const { user, initialize, loading } = useAuthStore()
+function MainLayout() {
+  const { user } = useAuthStore()
   const { setSelected, get } = useCasesStore()
-  const [activeTab, setActiveTab] = useState<Tab>('console')
+  const navigate = useNavigate()
+  const location = useLocation()
   const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const [authInitialized, setAuthInitialized] = useState(false)
 
-  useEffect(() => {
-    initialize()
-    setAuthInitialized(true)
-  }, [initialize])
+  // Helper to check if user has a specific role
+  const hasRole = (role: string): boolean => {
+    if (!user) return false
+    return user.roles.includes(role)
+  }
 
-  const isAuthenticated = authInitialized && (user || auth.isAuthenticated())
+  // Get active tab from route
+  const getActiveTab = (): Tab => {
+    const path = location.pathname
+    if (path === '/saved') return 'saved'
+    if (path === '/dashboards') return 'dashboards'
+    if (path === '/alerts') return 'alerts'
+    if (path === '/cases') return 'cases'
+    return 'console'
+  }
+
+  const activeTab = getActiveTab()
 
   useEffect(() => {
     const unsubscribe = subscribeToToast((message) => {
@@ -44,7 +56,7 @@ export default function App() {
   useEffect(() => {
     const handleNavigateToCases = async (e: Event) => {
       const customEvent = e as CustomEvent<{ caseId?: number }>
-      setActiveTab('cases')
+      navigate('/cases')
       if (customEvent.detail?.caseId) {
         try {
           const caseData = await get(customEvent.detail.caseId)
@@ -56,7 +68,7 @@ export default function App() {
     }
     const handleNavigateToAlerts = (e: Event) => {
       const customEvent = e as CustomEvent<{ alertId?: number }>
-      setActiveTab('alerts')
+      navigate('/alerts')
       // Could scroll to alert or highlight it if needed
     }
 
@@ -67,26 +79,7 @@ export default function App() {
       window.removeEventListener('navigate-to-cases', handleNavigateToCases)
       window.removeEventListener('navigate-to-alerts', handleNavigateToAlerts)
     }
-  }, [get, setSelected])
-
-  // Helper to check if user has a specific role
-  const hasRole = (role: string): boolean => {
-    if (!user) return false
-    return user.roles.includes(role)
-  }
-
-  // Show loading state while auth initializes - MUST be before authentication check
-  if (!authInitialized || loading) {
-    return (
-      <div className="min-h-screen bg-surface text-white flex items-center justify-center">
-        <div className="text-lg">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!isAuthenticated) {
-    return <LoginForm />
-  }
+  }, [get, setSelected, navigate])
 
   return (
     <div className="min-h-screen bg-surface text-white">
@@ -100,7 +93,7 @@ export default function App() {
             className="relative cursor-pointer"
             onClick={() => {
               // Clear unread by navigating to Alerts
-              setActiveTab('alerts');
+              navigate('/alerts')
             }}
             title="Open Alerts"
           >
@@ -117,7 +110,7 @@ export default function App() {
               ? 'border-b-2 border-white text-white'
               : 'opacity-70 hover:opacity-100 text-white'
           }`}
-          onClick={() => setActiveTab('console')}
+          onClick={() => navigate('/')}
         >
           Console
         </button>
@@ -127,7 +120,7 @@ export default function App() {
               ? 'border-b-2 border-white text-white'
               : 'opacity-70 hover:opacity-100 text-white'
           }`}
-          onClick={() => setActiveTab('saved')}
+          onClick={() => navigate('/saved')}
         >
           Saved Queries
         </button>
@@ -137,7 +130,7 @@ export default function App() {
               ? 'border-b-2 border-white text-white'
               : 'opacity-70 hover:opacity-100 text-white'
           }`}
-          onClick={() => setActiveTab('dashboards')}
+          onClick={() => navigate('/dashboards')}
         >
           Dashboards
         </button>
@@ -148,7 +141,7 @@ export default function App() {
                 ? 'border-b-2 border-white text-white'
                 : 'opacity-70 hover:opacity-100 text-white'
             }`}
-            onClick={() => setActiveTab('alerts')}
+            onClick={() => navigate('/alerts')}
           >
             Alerts
           </button>
@@ -160,67 +153,110 @@ export default function App() {
                 ? 'border-b-2 border-white text-white'
                 : 'opacity-70 hover:opacity-100 text-white'
             }`}
-            onClick={() => setActiveTab('cases')}
+            onClick={() => navigate('/cases')}
           >
             Cases
           </button>
         )}
       </div>
 
-      {activeTab === 'console' && (
-        <>
-          <div className="grid grid-cols-2 grid-rows-2 h-[calc(100vh-8rem)] gap-4 p-4">
-            <div className="border-r border-white/10 pr-4 flex flex-col min-h-0">
-              <MapPanel />
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <>
+              <div className="grid grid-cols-2 grid-rows-2 h-[calc(100vh-8rem)] gap-4 p-4">
+                <div className="border-r border-white/10 pr-4 flex flex-col min-h-0">
+                  <MapPanel />
+                </div>
+                <div className="pl-4 flex flex-col min-h-0">
+                  <GraphPanel />
+                </div>
+                
+                <div className="border-r border-white/10 pr-4 flex flex-col min-h-0 border-t border-white/10 pt-4">
+                  <ListPanel />
+                </div>
+                <div className="pl-4 flex flex-col min-h-0 border-t border-white/10 pt-4">
+                  <TimelinePanel />
+                </div>
+              </div>
+              <EntityInspector />
+            </>
+          }
+        />
+        <Route
+          path="/saved"
+          element={
+            <div className="h-[calc(100vh-8rem)] overflow-auto">
+              <SavedQueriesPanel />
             </div>
-            <div className="pl-4 flex flex-col min-h-0">
-              <GraphPanel />
+          }
+        />
+        <Route
+          path="/dashboards"
+          element={
+            <div className="h-[calc(100vh-8rem)] overflow-auto">
+              <DashboardEditor />
             </div>
-            
-            <div className="border-r border-white/10 pr-4 flex flex-col min-h-0 border-t border-white/10 pt-4">
-              <ListPanel />
-            </div>
-            <div className="pl-4 flex flex-col min-h-0 border-t border-white/10 pt-4">
-              <TimelinePanel />
-            </div>
-          </div>
-
-          <EntityInspector />
-        </>
-      )}
-
-      {activeTab === 'saved' && (
-        <div className="h-[calc(100vh-8rem)] overflow-auto">
-          <SavedQueriesPanel />
-        </div>
-      )}
-
-      {activeTab === 'dashboards' && (
-        <div className="h-[calc(100vh-8rem)] overflow-auto">
-          <DashboardEditor />
-        </div>
-      )}
-
-      {activeTab === 'alerts' && (hasRole('analyst') || hasRole('admin')) && (
-        <div className="h-[calc(100vh-8rem)] overflow-auto">
-          <AlertsTab />
-        </div>
-      )}
-
-      {activeTab === 'cases' && (hasRole('analyst') || hasRole('admin') || hasRole('viewer')) && (
-        <div className="h-[calc(100vh-8rem)] overflow-auto">
-          <CasesTab />
-        </div>
-      )}
+          }
+        />
+        <Route
+          path="/alerts"
+          element={
+            (hasRole('analyst') || hasRole('admin')) ? (
+              <div className="h-[calc(100vh-8rem)] overflow-auto">
+                <AlertsTab />
+              </div>
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
+          path="/cases"
+          element={
+            (hasRole('analyst') || hasRole('admin') || hasRole('viewer')) ? (
+              <div className="h-[calc(100vh-8rem)] overflow-auto">
+                <CasesTab />
+              </div>
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
       
-      {/* Example: Role-based conditional rendering
-      {hasRole('admin') && (
-        <AdminPanel />
-      )}
-      */}
       {toastMessage && (
         <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
       )}
     </div>
   )
+}
+
+export default function App() {
+  const { user, initialize, loading } = useAuthStore()
+  const [authInitialized, setAuthInitialized] = useState(false)
+
+  useEffect(() => {
+    initialize()
+    setAuthInitialized(true)
+  }, [initialize])
+
+  const isAuthenticated = authInitialized && (user || auth.isAuthenticated())
+
+  // Show loading state while auth initializes
+  if (!authInitialized || loading) {
+    return (
+      <div className="min-h-screen bg-surface text-white flex items-center justify-center">
+        <div className="text-lg">Loading...</div>
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return <LoginForm />
+  }
+
+  return <MainLayout />
 }

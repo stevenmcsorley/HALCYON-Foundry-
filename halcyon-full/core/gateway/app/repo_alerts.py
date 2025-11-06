@@ -1,6 +1,7 @@
 from typing import List, Optional, Dict, Any, Tuple
 import json
 from datetime import datetime as dt
+import asyncpg
 from .db import get_pool
 
 
@@ -9,8 +10,11 @@ async def create_rule(payload: Dict[str, Any]) -> int:
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            """INSERT INTO alert_rules(name, description, condition_json, severity, actions_json, enabled, created_by)
-               VALUES ($1, $2, $3::jsonb, $4::alert_severity, $5::jsonb, $6, $7)
+            """INSERT INTO alert_rules(
+                name, description, condition_json, severity, actions_json, enabled, created_by,
+                fingerprint_template, correlation_keys, mute_seconds, route
+            )
+               VALUES ($1, $2, $3::jsonb, $4::alert_severity, $5::jsonb, $6, $7, $8, $9::jsonb, $10, $11::jsonb)
                RETURNING id""",
             payload["name"],
             payload.get("description"),
@@ -18,7 +22,11 @@ async def create_rule(payload: Dict[str, Any]) -> int:
             payload.get("severity", "medium"),
             json.dumps(payload.get("actions_json")) if payload.get("actions_json") else None,
             payload.get("enabled", True),
-            payload.get("created_by")
+            payload.get("created_by"),
+            payload.get("fingerprint_template"),
+            json.dumps(payload.get("correlation_keys")) if payload.get("correlation_keys") else None,
+            payload.get("mute_seconds", 0),
+            json.dumps(payload.get("route")) if payload.get("route") else None
         )
         return int(row["id"])
 
@@ -30,7 +38,8 @@ async def update_rule(rule_id: int, payload: Dict[str, Any]) -> None:
         await conn.execute(
             """UPDATE alert_rules SET
                 name=$1, description=$2, condition_json=$3::jsonb,
-                severity=$4::alert_severity, actions_json=$5::jsonb, enabled=$6
+                severity=$4::alert_severity, actions_json=$5::jsonb, enabled=$6,
+                fingerprint_template=$8, correlation_keys=$9::jsonb, mute_seconds=$10, route=$11::jsonb
                WHERE id=$7""",
             payload["name"],
             payload.get("description"),
@@ -38,7 +47,11 @@ async def update_rule(rule_id: int, payload: Dict[str, Any]) -> None:
             payload.get("severity", "medium"),
             json.dumps(payload.get("actions_json")) if payload.get("actions_json") else None,
             payload.get("enabled", True),
-            rule_id
+            rule_id,
+            payload.get("fingerprint_template"),
+            json.dumps(payload.get("correlation_keys")) if payload.get("correlation_keys") else None,
+            payload.get("mute_seconds", 0),
+            json.dumps(payload.get("route")) if payload.get("route") else None
         )
 
 
@@ -47,6 +60,27 @@ async def delete_rule(rule_id: int) -> None:
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute("DELETE FROM alert_rules WHERE id=$1", rule_id)
+
+
+async def get_rule(conn: asyncpg.Connection, rule_id: int) -> Optional[Dict[str, Any]]:
+    """Get a single alert rule by ID."""
+    row = await conn.fetchrow("SELECT * FROM alert_rules WHERE id=$1", rule_id)
+    if not row:
+        return None
+    d = dict(row)
+    # Parse JSONB fields
+    if d.get("condition_json"):
+        d["condition_json"] = json.loads(d["condition_json"]) if isinstance(d["condition_json"], str) else d["condition_json"]
+    if d.get("actions_json"):
+        d["actions_json"] = json.loads(d["actions_json"]) if isinstance(d["actions_json"], str) else d["actions_json"]
+    if d.get("correlation_keys"):
+        d["correlation_keys"] = json.loads(d["correlation_keys"]) if isinstance(d["correlation_keys"], str) else d["correlation_keys"]
+    if d.get("route"):
+        d["route"] = json.loads(d["route"]) if isinstance(d["route"], str) else d["route"]
+    # Convert enum to string
+    if d.get("severity"):
+        d["severity"] = str(d["severity"])
+    return d
 
 
 async def list_rules() -> List[Dict[str, Any]]:
@@ -69,6 +103,9 @@ async def list_rules() -> List[Dict[str, Any]]:
             # Convert enum to string
             if d.get("severity"):
                 d["severity"] = str(d["severity"])
+            # Convert created_at to ISO string if it's a datetime
+            if d.get("created_at") and hasattr(d["created_at"], "isoformat"):
+                d["created_at"] = d["created_at"].isoformat()
             result.append(d)
         return result
 
@@ -88,7 +125,7 @@ async def upsert_alert(
     """
     pool = await get_pool()
     async with pool.acquire() as conn:
-        now = datetime.utcnow()
+        now = dt.utcnow()
         
         # Check for existing open alert with same fingerprint
         if mute_seconds > 0:
@@ -138,7 +175,7 @@ async def insert_alert(
     """
     pool = await get_pool()
     async with pool.acquire() as conn:
-        now = datetime.utcnow()
+        now = dt.utcnow()
         row = await conn.fetchrow(
             """INSERT INTO alerts(rule_id, entity_id, message, severity, fingerprint, group_key, first_seen, last_seen, count, status)
                VALUES ($1, $2, $3, $4::alert_severity, $5, $6, $7, $8, 1, 'open'::alert_status) RETURNING id""",

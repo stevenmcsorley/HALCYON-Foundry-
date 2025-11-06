@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional, List
+from datetime import datetime
 from .db import get_pool
 from .models import AlertRuleIn, AlertRule, Alert
 from .repo_alerts import create_rule, update_rule, delete_rule, list_rules, list_alerts, ack_alert, resolve_alert
@@ -33,7 +34,14 @@ def require_roles(allowed_roles: List[str]):
 async def get_rules():
     """List all alert rules."""
     rules = await list_rules()
-    return [AlertRule(**r) for r in rules]
+    # Ensure route field is included and created_at is string
+    result = []
+    for r in rules:
+        # Convert created_at to string if it's a datetime
+        if isinstance(r.get("created_at"), (datetime, str)):
+            r["created_at"] = r["created_at"].isoformat() if hasattr(r["created_at"], "isoformat") else str(r["created_at"])
+        result.append(AlertRule(**r))
+    return result
 
 
 @router.post("/rules", response_model=dict, status_code=201)
@@ -57,6 +65,16 @@ async def del_rule(rule_id: int, user=Depends(require_roles(["admin"]))):
     """Delete an alert rule (admin only)."""
     await delete_rule(rule_id)
     return {"ok": True}
+
+
+@router.get("/{alert_id:int}", response_model=Alert)
+async def get_alert_by_id(alert_id: int):
+    """Get a single alert by ID (public endpoint, no auth required)."""
+    from .repo_alerts import get_alert as get_alert_repo
+    alert = await get_alert_repo(alert_id)
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return Alert(**alert)
 
 
 @router.get("", response_model=List[Alert])

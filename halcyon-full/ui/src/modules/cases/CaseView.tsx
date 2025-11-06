@@ -4,6 +4,9 @@ import CaseMeta from "./CaseMeta";
 import CaseNotes from "./CaseNotes";
 import CaseAlerts from "./CaseAlerts";
 import CaseInsights from "./CaseInsights";
+import CaseFeedbackList from "./CaseFeedbackList";
+import EnrichmentPanel from "@/modules/enrichment/EnrichmentPanel";
+import PlaybooksPanel from "@/modules/enrichment/PlaybooksPanel";
 
 interface CaseViewProps {
   caseId: number;
@@ -62,9 +65,23 @@ export default function CaseView({ caseId, onAlertClick }: CaseViewProps) {
 
       <CaseInsights caseData={caseData} onUpdate={handleUpdate} />
 
+      {import.meta.env.VITE_ENABLE_ML_FEEDBACK !== "false" && (
+        <CaseFeedbackList caseId={caseId} />
+      )}
+
       <CaseAlerts caseId={caseId} onAlertClick={onAlertClick} />
 
       <CaseNotes caseId={caseId} />
+
+      <div className="border-t border-white/10 pt-6">
+        <h3 className="text-lg font-semibold text-white mb-4">Enrichment</h3>
+        <EnrichmentPanel subjectKind="case" subjectId={caseId} />
+      </div>
+
+      <div className="border-t border-white/10 pt-6">
+        <h3 className="text-lg font-semibold text-white mb-4">Playbooks</h3>
+        <PlaybooksPanel subjectKind="case" subjectId={caseId} />
+      </div>
     </div>
   );
 }

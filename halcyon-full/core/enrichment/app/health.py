@@ -1,16 +1,17 @@
+import os
 import httpx
 from fastapi import APIRouter, Response
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
-from .main import settings
 
 router = APIRouter()
 
 
 async def check_ontology() -> dict:
     """Check Ontology service."""
+    ontology_url = os.getenv("ONTOLOGY_BASE_URL", "http://ontology:8081")
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
-            r = await client.get(f"{settings.ontology_base_url}/health")
+            r = await client.get(f"{ontology_url}/health")
             if r.status_code == 200:
                 return {"status": "ok"}
             return {"status": "down", "error": f"HTTP {r.status_code}"}
