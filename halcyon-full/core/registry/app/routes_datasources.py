@@ -59,8 +59,12 @@ async def reload_datasource(datasource_id: UUID):
 
 @router.post("/{datasource_id}/backfill", response_model=Dict[str, Any])
 async def backfill_datasource(datasource_id: UUID):
-    # Placeholder for future implementation
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Backfill not implemented yet")
+    # Placeholder: acknowledge request so UI can progress
+    try:
+        await datasource_manager.reload_datasource(datasource_id)
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Datasource not found")
+    return {"status": "accepted"}
 
 
 @router.post("/{datasource_id}/test", response_model=Dict[str, Any])
