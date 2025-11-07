@@ -7,6 +7,7 @@ from .repo_suppress import mark_alert_suppressed
 from .actions import dispatch_on_create
 from .metrics import alerts_created_total, alerts_deduped_total, alerts_suppressed_total
 import asyncio
+from .autorun import evaluate_bindings
 
 query = QueryType(); mutation = MutationType()
 
@@ -113,12 +114,7 @@ async def _run_rules_and_publish(entities):
                 alert_data = await get_alert(alert_id)
 
                 if was_created:
-                    if is_suppressed_flag:
-                        # Suppressed new alert: increment suppressed metric and publish without routing
-                        # Note: created metric is still incremented (alert was created, just suppressed)
-                        alerts_created_total.labels(rule=str(r["id"])).inc()
-                    else:
-                        # Normal new alert: increment created metric and notify
+                    if not is_suppressed_flag:
                         alerts_created_total.labels(rule=str(r["id"])).inc()
 
                     # Publish alert.created via WebSocket (always, even if suppressed)
@@ -152,6 +148,16 @@ async def _run_rules_and_publish(entities):
                             "title": f"Alert: {msg[:50]}",
                         }
                         await dispatch_on_create(alert_payload, rule_route)
+
+                    # Trigger playbook binding evaluation (on create, regardless of suppression)
+                    binding_alert = dict(alert_data or {})
+                    binding_alert["id"] = alert_id
+                    binding_alert["ruleId"] = int(r["id"])
+                    binding_alert["severity"] = r.get("severity", "medium")
+                    binding_alert["entity"] = entity
+                    if entity.get("attrs", {}).get("tags"):
+                        binding_alert["tags"] = entity["attrs"].get("tags")
+                    asyncio.create_task(evaluate_bindings(binding_alert, user="system"))
                 else:
                     # Dedupe update: increment deduped metric and publish update
                     if not is_suppressed_flag:

@@ -12,13 +12,21 @@ const items: { type: PanelType; title: string; desc: string }[] = [
   { type: 'geoheat', title: 'Geo Heat', desc: 'Spatial density map' },
 ]
 
-export default function PanelLibrary({ onPick }: { onPick: (t: PanelType) => void }) {
+interface PanelLibraryProps {
+  onPick: (t: PanelType) => void
+  variant?: 'grid' | 'single-column'
+}
+
+export default function PanelLibrary({ onPick, variant = 'grid' }: PanelLibraryProps) {
+  const isColumn = variant === 'single-column'
   return (
-    <div className="grid grid-cols-4 gap-2">
+    <div className={isColumn ? 'space-y-2' : 'grid grid-cols-4 gap-2'}>
       {items.map((i) => (
         <button
           key={i.type}
-          className="bg-black/20 rounded p-3 text-left hover:bg-white/5 text-white"
+          className={`bg-black/20 rounded p-3 text-left hover:bg-white/5 text-white ${
+            isColumn ? 'w-full' : ''
+          }`}
           onClick={() => onPick(i.type)}
         >
           <div className="font-semibold">{i.title}</div>

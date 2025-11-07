@@ -88,8 +88,10 @@ HALCYON is designed from the ground up to be **domain-agnostic** and **multi-sce
 - **Knowledge Graph** - Entity relationship visualization with Cytoscape
 - **Timeline View** - Temporal event playback and scrubbing
 - **List View** - Tabular data exploration with filtering
+- **Console Overview Tiles** - Real-time summary of alerts, cases, and dashboards
 - **Custom Dashboards** - Build and save custom visualization dashboards
 - **Shape-Aware Panels** - Reusable components across domains (entities[], counts[], metric, geo[], items[])
+- **Saved Query Studio** - Run, auto-detect shapes, and manage reusable GraphQL queries
 
 ### 🚨 **Alert Management**
 - Alert ingestion from multiple sources
@@ -115,6 +117,7 @@ HALCYON is designed from the ground up to be **domain-agnostic** and **multi-sce
 - **Test Run Sandbox** - Simulate playbook execution
 - **Templates** - Pre-built playbook templates
 - **Import/Export** - Share playbooks as JSON
+- **Auto-Binding** - Suggest, dry-run, or auto-run playbooks on alert creation with guardrails and audit trail
 
 ### 🔍 **Enrichment Engine**
 Pluggable enrichment actions usable across all scenarios:
@@ -126,6 +129,7 @@ Pluggable enrichment actions usable across all scenarios:
 - **HTTP GET/POST** - Webhook integrations for external APIs
 - **Multi-step Playbooks** - Chain enrichment actions together
 - **Custom Actions** - Extensible action framework for domain-specific enrichment
+- **Shape-Aware Saved Queries** - Automatic shape inference and validation for dashboard compatibility
 
 ### 🤖 **Anomaly Detection**
 - **Statistical Methods** - Z-score, moving averages, percentile-based detection

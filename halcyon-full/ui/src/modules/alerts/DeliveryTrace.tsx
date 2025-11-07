@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useActionsStore, type ActionAttempt } from "@/store/actionsStore";
+import { useBindingsStore, type PlaybookRunAudit } from "@/store/bindingsStore";
 import { hasRole } from "@/services/auth";
-// Button component - using inline button styles
 import { Badge } from "@/components/ui/badge";
 import { showToast } from "@/components/Toast";
 
@@ -11,17 +11,22 @@ interface DeliveryTraceProps {
 
 export default function DeliveryTrace({ alertId }: DeliveryTraceProps) {
   const { loadLogs, retryAllFailed } = useActionsStore();
+  const { loadAudit, auditByAlertId } = useBindingsStore();
   const [logs, setLogs] = useState<ActionAttempt[]>([]);
   const [loading, setLoading] = useState(true);
   const [retrying, setRetrying] = useState(false);
   const canEdit = hasRole("analyst") || hasRole("admin");
 
+  const playbookRuns = auditByAlertId[alertId] ?? [];
+
   useEffect(() => {
     loadData();
+    loadPlaybookAudit();
     // Auto-refresh every 10s when tab is focused
     const interval = setInterval(() => {
       if (!document.hidden) {
         loadData();
+        loadPlaybookAudit();
       }
     }, 10000);
     return () => clearInterval(interval);
@@ -37,6 +42,14 @@ export default function DeliveryTrace({ alertId }: DeliveryTraceProps) {
       // Error handled in store
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPlaybookAudit = async () => {
+    try {
+      await loadAudit(alertId);
+    } catch (error) {
+      // handled in store silently
     }
   };
 
@@ -78,7 +91,12 @@ export default function DeliveryTrace({ alertId }: DeliveryTraceProps) {
   }
 
   if (logs.length === 0) {
-    return <div className="text-white/60 text-sm">No delivery attempts yet</div>;
+    return (
+      <div className="space-y-4">
+        <div className="text-white/60 text-sm">No delivery attempts yet</div>
+        <PlaybookRunsTimeline runs={playbookRuns} />
+      </div>
+    );
   }
 
   const hasFailed = logs.some(l => l.status === "failed" || l.status === "retry");
@@ -147,6 +165,45 @@ export default function DeliveryTrace({ alertId }: DeliveryTraceProps) {
           </div>
         ))}
       </div>
+
+      <PlaybookRunsTimeline runs={playbookRuns} />
+    </div>
+  );
+}
+
+function PlaybookRunsTimeline({ runs }: { runs: PlaybookRunAudit[] }) {
+  if (!runs || runs.length === 0) {
+    return (
+      <div className="text-white/50 text-xs bg-white/5 border border-white/10 rounded-lg px-3 py-2">
+        No playbook binding activity yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <h4 className="text-sm font-semibold text-white">Playbook Runs</h4>
+      {runs.map((entry) => (
+        <div key={entry.id} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80">
+          <div className="flex justify-between">
+            <span className="font-mono">Binding {entry.bindingId ?? "global"}</span>
+            <span className="text-white/50">{entry.startedAt}</span>
+          </div>
+          <div className="flex justify-between mt-1">
+            <span className="capitalize">Mode: {entry.mode.replace("_", " ")}</span>
+            <span className="text-teal-300">Decision: {entry.decision}</span>
+          </div>
+          {entry.reason && (
+            <div className="text-yellow-200 mt-1">Reason: {entry.reason}</div>
+          )}
+          {entry.outputRef && (
+            <div className="text-white/60 mt-1">Output: {entry.outputRef}</div>
+          )}
+          {typeof entry.success === "boolean" && (
+            <div className="text-white/50 mt-1">Success: {entry.success ? "yes" : "no"}</div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

@@ -45,24 +45,23 @@ export const GraphPanel: React.FC = () => {
   }, [])
 
   return (
-    <Card title="Graph">
+    <Card
+      title="Graph"
+      header={
+        <label className="flex items-center gap-2 text-xs cursor-pointer">
+          <input
+            type="checkbox"
+            checked={followLiveGraph}
+            onChange={(e) => setFollowLiveGraph(e.target.checked)}
+            className="w-3 h-3"
+          />
+          Follow Live
+        </label>
+      }
+    >
       {/* Toolbar with filters and controls */}
-      <div className="px-3 py-2 border-b border-white/10 space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="text-sm opacity-80">Graph</div>
-          <label className="flex items-center gap-2 text-xs cursor-pointer">
-            <input
-              type="checkbox"
-              checked={followLiveGraph}
-              onChange={(e) => setFollowLiveGraph(e.target.checked)}
-              className="w-3 h-3"
-            />
-            Follow Live
-          </label>
-        </div>
-        
-        {/* Filter Controls */}
-        <div className="flex flex-wrap gap-2 text-xs">
+      <div className="px-3 py-2 border-b border-white/10 text-xs space-y-2">
+        <div className="flex flex-wrap gap-2">
           {/* Entity Type Filter */}
           <select
             value={entityTypeFilter}

@@ -29,9 +29,9 @@ export const MapPanel: React.FC = () => {
   }, [entities])
 
   return (
-    <Card title="Map">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
-        <div className="text-sm opacity-80">Map</div>
+    <Card
+      title="Map"
+      header={
         <label className="flex items-center gap-2 text-xs cursor-pointer">
           <input
             type="checkbox"
@@ -41,7 +41,8 @@ export const MapPanel: React.FC = () => {
           />
           Follow Live
         </label>
-      </div>
+      }
+    >
       {loading && <div className="text-sm text-muted mb-2 flex-shrink-0 p-3">Loading...</div>}
       {error && <div className="text-sm text-red-400 mb-2 flex-shrink-0 p-3">Error: {error}</div>}
       {!loading && !error && (

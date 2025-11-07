@@ -32,14 +32,20 @@ class Dashboard(BaseModel):
     owner: str
     created_at: datetime
     updated_at: datetime
+    config: Dict[str, Any] = Field(default_factory=dict)
+    is_default: bool = False
 
 
 class DashboardCreate(BaseModel):
     name: str
+    config: Optional[Dict[str, Any]] = None
+    is_default: bool = False
 
 
 class DashboardUpdate(BaseModel):
     name: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
+    is_default: Optional[bool] = None
 
 
 class DashboardPanel(BaseModel):
@@ -74,6 +80,8 @@ class DashboardWithPanels(BaseModel):
     owner: str
     created_at: datetime
     updated_at: datetime
+    config: Dict[str, Any] = Field(default_factory=dict)
+    is_default: bool = False
     panels: List[DashboardPanel] = Field(default_factory=list)
 
 

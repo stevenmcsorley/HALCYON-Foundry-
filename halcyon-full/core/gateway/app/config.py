@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     ontology_base_url: str
     policy_base_url: str
     registry_base_url: str = "http://registry:8090"
+    enrichment_base_url: str = "http://enrichment:8091"
     pg_dsn: str = os.getenv("PG_DSN", "postgresql://postgres:dev@postgres:5432/halcyon")
     service_name: str = "halcyon-gateway"
     default_roles: List[str] = ["analyst"]

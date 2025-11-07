@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any, Tuple
 import json
-from datetime import datetime as dt
+from datetime import datetime as dt, timezone
 import asyncpg
 from .db import get_pool
 
@@ -125,7 +125,7 @@ async def upsert_alert(
     """
     pool = await get_pool()
     async with pool.acquire() as conn:
-        now = dt.utcnow()
+        now = dt.now(tz=timezone.utc)
         
         # Check for existing open alert with same fingerprint
         if mute_seconds > 0:
@@ -140,6 +140,8 @@ async def upsert_alert(
                 # Check if within mute window
                 last_seen = existing["last_seen"]
                 if last_seen:
+                    if last_seen.tzinfo is None:
+                        last_seen = last_seen.replace(tzinfo=timezone.utc)
                     age_seconds = (now - last_seen).total_seconds()
                     if age_seconds < mute_seconds:
                         # Dedupe: update count and last_seen

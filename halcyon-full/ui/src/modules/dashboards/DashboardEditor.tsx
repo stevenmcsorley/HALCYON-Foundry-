@@ -9,14 +9,17 @@ import { AlertDialog } from '@/components/AlertDialog'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { PromptDialog } from '@/components/PromptDialog'
 import { isShapeCompatible, getExpectedShape, getShapeLabel, getPanelHint, type QueryShape } from '@/lib/queryShapes'
+import { Card } from '@/components/Card'
 
 export default function DashboardEditor() {
-  const { dashboards, panels, queries, loadDashboards, loadPanels, loadQueries } = useSavedStore()
+  const { dashboards, panels, queries, loadDashboards, loadPanels, loadQueries, defaultDashboardId, setDefaultDashboard } = useSavedStore()
   const { user } = useAuthStore()
   const [current, setCurrent] = React.useState<string | null>(null)
   const [busy, setBusy] = React.useState(false)
   const [editingName, setEditingName] = React.useState<string | null>(null)
   const [editingNameValue, setEditingNameValue] = React.useState('')
+  const [search, setSearch] = React.useState('')
+  const [sidebarTab, setSidebarTab] = React.useState<'dashboards' | 'library'>('dashboards')
   
   // Modal states
   const [alertDialog, setAlertDialog] = React.useState<{ isOpen: boolean; title: string; message: string; variant?: 'error' | 'info' | 'success' }>({
@@ -39,12 +42,16 @@ export default function DashboardEditor() {
     onConfirm: () => {},
     defaultValue: ''
   })
+  const importInputRef = React.useRef<HTMLInputElement | null>(null)
 
   // Filter dashboards by role
   const userRoles = user?.roles || []
   const visibleDashboards = React.useMemo(() => {
-    return filterDashboardsByRole(dashboards, userRoles)
-  }, [dashboards, userRoles])
+    const filtered = filterDashboardsByRole(dashboards, userRoles)
+    const term = search.trim().toLowerCase()
+    if (!term) return filtered
+    return filtered.filter((d) => d.name.toLowerCase().includes(term))
+  }, [dashboards, userRoles, search])
 
   React.useEffect(() => {
     loadDashboards()
@@ -58,6 +65,17 @@ export default function DashboardEditor() {
   }, [current, loadPanels])
 
   const currPanels = current ? panels[current] || [] : []
+  const selectedDashboard = current ? dashboards.find((d) => d.id === current) ?? null : null
+  const selectedConfig = (selectedDashboard?.config as Record<string, unknown> | undefined) ?? undefined
+  const dashboardDescription = selectedConfig && typeof selectedConfig['description'] === 'string'
+    ? (selectedConfig['description'] as string)
+    : null
+  const isDefaultDashboard = selectedDashboard
+    ? selectedDashboard.isDefault ?? selectedDashboard.id === defaultDashboardId
+    : false
+  const totalPanels = currPanels.length
+  const totalLinkedQueries = currPanels.filter((p) => p.queryId).length
+  const unassignedPanels = Math.max(0, totalPanels - totalLinkedQueries)
 
   const addPanel = async (type: PanelType, queryId?: string) => {
     if (!current) return
@@ -67,7 +85,7 @@ export default function DashboardEditor() {
       await savedApi.createPanel(current, {
         title: `${type} panel`,
         type,
-        queryId: queryId, // No auto-assignment - start with no query
+        queryId,
         refreshSec: 30,
         position: currPanels.length,
       })
@@ -81,6 +99,22 @@ export default function DashboardEditor() {
 
   const updatePanelQuery = async (panelId: string, queryId: string | undefined) => {
     if (!current) return
+    const panel = currPanels.find((p) => p.id === panelId)
+    if (!panel) return
+
+    if (queryId) {
+      const query = queries.find((q) => q.id === queryId)
+      const shape = query?.shapeHint ?? 'unknown'
+      if (!isShapeCompatible(shape, panel.type)) {
+        setAlertDialog({
+          isOpen: true,
+          title: 'Incompatible Query',
+          message: `“${query?.name ?? 'Query'}” returns ${shape} data which is incompatible with the ${panel.type} panel. Choose a compatible query or update the query shape.`,
+          variant: 'error',
+        })
+        return
+      }
+    }
     try {
       await savedApi.updatePanel(current, panelId, { queryId })
       await loadPanels(current)
@@ -235,253 +269,455 @@ export default function DashboardEditor() {
     })
   }
 
-  return (
-    <div className="space-y-4 p-4">
-      <div className="flex gap-2 items-center flex-wrap">
-        <select
-          className="bg-black/30 rounded px-2 py-1 text-white"
-          value={current ?? ''}
-          onChange={(e) => {
-            setCurrent(e.target.value || null)
-            setEditingName(null)
-          }}
-        >
-          <option value="">— Select dashboard —</option>
-          {visibleDashboards.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </select>
-        <button
-          className="px-2 py-1 bg-white/10 rounded hover:bg-white/20 disabled:opacity-50 text-white text-sm"
-          onClick={handleNewDashboard}
-          disabled={busy}
-        >
-          New Dashboard
-        </button>
-        {current && (
-          <>
-            <button
-              className="px-2 py-1 bg-teal-600 hover:bg-teal-700 rounded disabled:opacity-50 text-white text-sm"
-              onClick={() => handleExport(current)}
-              disabled={busy}
-            >
-              Export
-            </button>
-            <button
-              className="px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50 text-white text-sm"
-              onClick={() => duplicateDashboard(current)}
-              disabled={busy}
-            >
-              Duplicate
-            </button>
-            <button
-              className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded disabled:opacity-50 text-white text-sm"
-              onClick={() => deleteDashboard(current)}
-              disabled={busy}
-            >
-              Delete
-            </button>
-            <input
-              type="file"
-              accept="application/json"
-              className="hidden"
-              id="import-dashboard"
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) handleImport(file)
-                e.target.value = '' // Reset input
-              }}
-            />
-            <label
-              htmlFor="import-dashboard"
-              className="px-2 py-1 bg-purple-600 hover:bg-purple-700 rounded cursor-pointer disabled:opacity-50 text-white text-sm"
-            >
-              Import
-            </label>
-          </>
-        )}
-      </div>
+  const handleSetDefaultDashboard = async (dashboardId: string | null) => {
+    if (dashboardId && dashboardId === defaultDashboardId) {
+      showToast('Already the console default')
+      return
+    }
+    if (!dashboardId && !defaultDashboardId) {
+      showToast('No default dashboard set')
+      return
+    }
+    try {
+      setBusy(true)
+      await setDefaultDashboard(dashboardId)
+      if (dashboardId) {
+        showToast('Console home will load this dashboard by default')
+      } else {
+        showToast('Console default dashboard cleared')
+      }
+    } catch (e: any) {
+      setAlertDialog({
+        isOpen: true,
+        title: 'Default Dashboard',
+        message: String(e?.message || e),
+        variant: 'error'
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
 
-      {current && (
-        <div className="flex gap-2 items-center">
-          {editingName === current ? (
-            <>
-              <input
-                type="text"
-                value={editingNameValue}
-                onChange={(e) => setEditingNameValue(e.target.value)}
-                onBlur={() => {
-                  if (editingNameValue.trim()) {
-                    renameDashboard(current, editingNameValue.trim())
-                  } else {
-                    setEditingName(null)
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    if (editingNameValue.trim()) {
-                      renameDashboard(current, editingNameValue.trim())
-                    }
-                  } else if (e.key === 'Escape') {
-                    setEditingName(null)
-                  }
-                }}
-                className="bg-black/30 rounded px-2 py-1 text-white"
-                autoFocus
-              />
-            </>
+  return (
+    <div className="h-full px-4 pb-6 pt-4 overflow-hidden">
+      <input
+        ref={importInputRef}
+        type="file"
+        accept="application/json"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          if (file) handleImport(file)
+          if (importInputRef.current) {
+            importInputRef.current.value = ''
+          }
+        }}
+      />
+
+      <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[320px,minmax(0,1fr)] lg:grid-cols-[280px,minmax(0,1fr)]">
+        <Card
+          title="Workspace"
+          header={
+            <div className="flex items-center gap-2">
+              <div className="inline-flex rounded-full bg-white/10 p-1">
+                <button
+                  onClick={() => setSidebarTab('dashboards')}
+                  className={`flex items-center justify-center h-8 w-8 rounded-full transition-colors ${
+                    sidebarTab === 'dashboards'
+                      ? 'bg-teal-600 text-white'
+                      : 'text-white/70 hover:text-white'
+                  }`}
+                  aria-label="Dashboards"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                    <path d="M3 3h6v6H3V3zm8 0h6v4h-6V3zM3 11h4v6H3v-6zm6 0h8v6H9v-6z" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setSidebarTab('library')}
+                  className={`flex items-center justify-center h-8 w-8 rounded-full transition-colors ${
+                    sidebarTab === 'library'
+                      ? 'bg-teal-600 text-white'
+                      : 'text-white/70 hover:text-white'
+                  }`}
+                  aria-label="Panel presets"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                    <path d="M4 7h16M4 12h10M4 17h7" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M17 16.5 19 18l3-3" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </div>
+              {sidebarTab === 'dashboards' && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => importInputRef.current?.click()}
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50"
+                    aria-label="Import dashboard"
+                    disabled={busy}
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                      <path d="M10 14l4-4H6l4 4zm0-12a8 8 0 100 16 8 8 0 000-16z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={handleNewDashboard}
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50"
+                    aria-label="New dashboard"
+                    disabled={busy}
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                      <path d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            </div>
+          }
+        >
+          <div className="flex-1 overflow-auto p-3 space-y-3">
+            {sidebarTab === 'dashboards' ? (
+              <>
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search dashboards"
+                  className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-teal-500"
+                />
+
+                <div className="space-y-2">
+                  {visibleDashboards.length === 0 ? (
+                    <div className="text-sm text-white/60 border border-dashed border-white/10 rounded-lg p-4">
+                      {dashboards.length === 0
+                        ? 'No dashboards yet. Create one to start composing a view.'
+                        : 'No dashboards match that search.'}
+                    </div>
+                  ) : (
+                    <ul className="space-y-1">
+                      {visibleDashboards.map((dash) => {
+                        const isActive = dash.id === current
+                        const panelCount = panels[dash.id]?.length ?? 0
+                        const isDefault = dash.isDefault ?? dash.id === defaultDashboardId
+                        const dashConfig = dash.config as Record<string, unknown> | undefined
+                        const description = dashConfig && typeof dashConfig['description'] === 'string'
+                          ? (dashConfig['description'] as string)
+                          : null
+                        return (
+                          <li key={dash.id}>
+                            <button
+                              onClick={() => {
+                                setCurrent(dash.id)
+                                setEditingName(null)
+                              }}
+                              className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${
+                                isActive
+                                  ? 'border-teal-500/80 bg-teal-500/10 text-white'
+                                  : 'border-white/10 hover:border-white/20 text-white/80 hover:text-white'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-sm font-medium">{dash.name}</span>
+                                <div className="flex items-center gap-2">
+                                  {isDefault && (
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-teal-400/60 bg-teal-500/10 px-2 py-[2px] text-[10px] uppercase tracking-wide text-teal-200">
+                                      ✓ Default
+                                    </span>
+                                  )}
+                                  <span className="text-xs text-white/50">{panelCount} panels</span>
+                                </div>
+                              </div>
+                              {description && (
+                                <p className="text-xs text-white/40 mt-1 line-clamp-2">{description}</p>
+                              )}
+                            </button>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-white/60">
+                  Drop-in visual building blocks. Pick a preset, then tune the query and settings on the right.
+                </p>
+                <div className="text-[11px] uppercase tracking-wide text-white/40">
+                  {queries.length} saved queries available
+                </div>
+                <div className="space-y-2">
+                  <PanelLibrary
+                    onPick={(type) => {
+                      addPanel(type)
+                    }}
+                    variant="single-column"
+                  />
+                </div>
+                <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-white/50">
+                  Hint: assign saved queries to each panel in the “Panels” section.
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        <div className="flex min-h-0 flex-col gap-4">
+          {!selectedDashboard ? (
+            <Card title="Pick a dashboard">
+              <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center p-6 text-white/60">
+                <p className="text-base font-medium text-white/70">Select or create a dashboard to begin.</p>
+                <p className="text-sm max-w-sm">
+                  Dashboards stitch saved queries into rich panels. You can mix timelines, geo maps, entity tables, and metrics in a single view.
+                </p>
+              </div>
+            </Card>
           ) : (
             <>
-              <span
-                className="font-semibold text-white cursor-pointer hover:underline"
-                onClick={() => {
-                  const dash = dashboards.find(d => d.id === current)
-                  setEditingNameValue(dash?.name || '')
-                  setEditingName(current)
-                }}
+              <Card
+                title="Dashboard overview"
+                header={
+                  <div className="flex flex-wrap items-center gap-2">
+                    {isDefaultDashboard ? (
+                      <>
+                        <span className="inline-flex items-center gap-1 rounded-full border border-teal-400/60 bg-teal-500/10 px-2 py-[2px] text-[11px] uppercase tracking-wide text-teal-200">
+                          ✓ Default on console
+                        </span>
+                        <button
+                          onClick={() => handleSetDefaultDashboard(null)}
+                          className="px-2 py-1 text-xs rounded border border-white/20 text-white/80 hover:text-white hover:border-white/40 disabled:opacity-50"
+                          disabled={busy}
+                        >
+                          Unset
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => handleSetDefaultDashboard(selectedDashboard.id)}
+                        className="px-2 py-1 text-xs rounded bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50"
+                        disabled={busy}
+                      >
+                        Use on console
+                      </button>
+                    )}
+                    <div className="h-4 w-px bg-white/20" />
+                    <button
+                      onClick={() => handleExport(selectedDashboard.id)}
+                      className="px-2 py-1 text-xs rounded bg-white/10 hover:bg-white/20 text-white disabled:opacity-50"
+                      disabled={busy}
+                    >
+                      Export
+                    </button>
+                    <button
+                      onClick={() => duplicateDashboard(selectedDashboard.id)}
+                      className="px-2 py-1 text-xs rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                      disabled={busy}
+                    >
+                      Duplicate
+                    </button>
+                    <button
+                      onClick={() => deleteDashboard(selectedDashboard.id)}
+                      className="px-2 py-1 text-xs rounded bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+                      disabled={busy}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                }
               >
-                {dashboards.find(d => d.id === current)?.name || 'Untitled'}
-              </span>
-              <span className="text-xs opacity-70 text-white">(click to rename)</span>
+                <div className="p-4 space-y-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    {editingName === selectedDashboard.id ? (
+                      <input
+                        type="text"
+                        value={editingNameValue}
+                        onChange={(e) => setEditingNameValue(e.target.value)}
+                        onBlur={() => {
+                          if (editingNameValue.trim()) {
+                            renameDashboard(selectedDashboard.id, editingNameValue.trim())
+                          } else {
+                            setEditingName(null)
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && editingNameValue.trim()) {
+                            renameDashboard(selectedDashboard.id, editingNameValue.trim())
+                          }
+                          if (e.key === 'Escape') {
+                            setEditingName(null)
+                          }
+                        }}
+                        className="bg-white/5 border border-teal-500/60 focus:border-teal-400 focus:outline-none rounded px-3 py-2 text-base text-white"
+                        autoFocus
+                      />
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setEditingNameValue(selectedDashboard.name)
+                          setEditingName(selectedDashboard.id)
+                        }}
+                        className="text-lg font-semibold text-white hover:text-teal-300"
+                      >
+                        {selectedDashboard.name}
+                      </button>
+                    )}
+                    <span className="text-xs text-white/40">Click name to rename</span>
+                  </div>
+
+                  {dashboardDescription && (
+                    <p className="text-sm text-white/60 max-w-3xl">{dashboardDescription}</p>
+                  )}
+
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-lg bg-white/5 border border-white/10 px-3 py-2">
+                      <div className="text-[11px] uppercase tracking-wide text-white/50">Panels</div>
+                      <div className="text-xl font-semibold text-white">{totalPanels}</div>
+                    </div>
+                    <div className="rounded-lg bg-white/5 border border-white/10 px-3 py-2">
+                      <div className="text-[11px] uppercase tracking-wide text-white/50">Panels with query</div>
+                      <div className="text-xl font-semibold text-white">{totalLinkedQueries}</div>
+                    </div>
+                    <div className="rounded-lg bg-white/5 border border-white/10 px-3 py-2">
+                      <div className="text-[11px] uppercase tracking-wide text-white/50">Unassigned</div>
+                      <div className={`text-xl font-semibold ${unassignedPanels > 0 ? 'text-amber-300' : 'text-white'}`}>{unassignedPanels}</div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              <Card title="Panels in this dashboard" className="min-h-[280px]">
+                <div className="p-4 space-y-4 overflow-auto">
+                  {currPanels.length === 0 ? (
+                    <div className="border border-dashed border-white/10 rounded-lg p-6 text-center text-sm text-white/60">
+                      No panels yet. Use the panel library above to add visual blocks.
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {currPanels.map((p) => {
+                        const query: SavedQuery | undefined = queries.find((q) => q.id === p.queryId)
+                        const expectedShape = getExpectedShape(p.type)
+                        const shapeLabel = p.queryId ? getShapeLabel(query?.shapeHint ?? 'unknown') : getShapeLabel(expectedShape)
+                        return (
+                          <Card
+                            key={p.id}
+                            title={p.title}
+                            header={
+                              <button
+                                className="text-[11px] uppercase tracking-wide text-rose-300 hover:text-rose-200"
+                                onClick={() => {
+                                  setConfirmDialog({
+                                    isOpen: true,
+                                    title: 'Remove Panel',
+                                    message: 'Remove this panel?',
+                                    danger: false,
+                                    onConfirm: () => removePanel(p.id)
+                                  })
+                                }}
+                              >
+                                Remove
+                              </button>
+                            }
+                          >
+                            <div className="p-3 flex flex-col gap-3 min-h-[220px]">
+                              <div className="grid gap-2">
+                                <div>
+                                  <label className="text-xs text-white/60 block">Query</label>
+                                  <select
+                                    data-panel-id={p.id}
+                                    value={p.queryId || ''}
+                                    onChange={(e) => updatePanelQuery(p.id, e.target.value || undefined)}
+                                    className="mt-1 w-full bg-white/5 border border-white/15 rounded px-2 py-2 text-sm text-white focus:outline-none focus:border-teal-400"
+                                  >
+                                    <option value="">— No query —</option>
+                                    {(() => {
+                                      const compatible: SavedQuery[] = []
+                                      const incompatible: SavedQuery[] = []
+
+                                      queries.forEach((q) => {
+                                        const shape: QueryShape = q.shapeHint || 'unknown'
+                                        const ok = isShapeCompatible(shape, p.type)
+                                        if (ok) compatible.push(q)
+                                        else incompatible.push(q)
+                                      })
+
+                                      return (
+                                        <>
+                                          {compatible.length > 0 && (
+                                            <optgroup label="✓ Compatible">
+                                              {compatible.map((q) => (
+                                                <option key={q.id} value={q.id}>
+                                                  {q.name} {q.shapeHint && `[${getShapeLabel(q.shapeHint)}]`}
+                                                </option>
+                                              ))}
+                                            </optgroup>
+                                          )}
+                                          {incompatible.length > 0 && (
+                                            <optgroup label="⚠ Incompatible">
+                                              {incompatible.map((q) => (
+                                                <option key={q.id} value={q.id} disabled>
+                                                  {q.name} {q.shapeHint && `[${getShapeLabel(q.shapeHint)}]`}
+                                                </option>
+                                              ))}
+                                            </optgroup>
+                                          )}
+                                        </>
+                                      )
+                                    })()}
+                                  </select>
+                                  {!p.queryId && (
+                                    <p className="text-xs text-white/45 italic mt-1">{getPanelHint(p.type)}</p>
+                                  )}
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="text-xs text-white/60 block">Refresh (sec)</label>
+                                    <input
+                                      type="number"
+                                      min="5"
+                                      max="86400"
+                                      value={p.refreshSec || 30}
+                                      onChange={(e) => updatePanelRefresh(p.id, e.target.value ? parseInt(e.target.value) : undefined)}
+                                      className="mt-1 w-full bg-white/5 border border-white/15 rounded px-2 py-2 text-sm text-white focus:outline-none focus:border-teal-400"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-xs text-white/60 block">Expected shape</label>
+                                    <div className="mt-1 text-xs text-white/50 px-2 py-2 bg-white/5 border border-white/10 rounded">
+                                      {shapeLabel}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex-1 min-h-0 border border-white/10 rounded-lg overflow-hidden">
+                                <PanelRenderer
+                                  type={p.type}
+                                  query={query || null}
+                                  refreshSec={p.refreshSec}
+                                  config={p.config}
+                                  onQueryChange={() => {
+                                    const selectEl = document.querySelector(`select[data-panel-id="${p.id}"]`) as HTMLSelectElement
+                                    if (selectEl) {
+                                      selectEl.focus()
+                                      selectEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                                    }
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          </Card>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </Card>
             </>
           )}
         </div>
-      )}
+      </div>
 
-      {current && (
-        <>
-          <div className="bg-black/20 rounded p-3">
-            <div className="font-semibold mb-2 text-white">Add panel</div>
-            <div className="flex gap-2 items-center">
-              <PanelLibrary
-                onPick={(type) => {
-                  addPanel(type, queries[0]?.id)
-                }}
-              />
-              <div className="text-xs opacity-70 text-white">
-                Panel query can be assigned after creation.
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            {currPanels.map((p) => {
-              const query: SavedQuery | undefined = queries.find((q) => q.id === p.queryId)
-              return (
-                <div key={p.id} className="bg-black/20 rounded p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-semibold text-white">{p.title}</div>
-                    <div className="flex gap-2">
-                      <button
-                        className="text-xs opacity-80 hover:opacity-100 text-white"
-                        onClick={() => {
-                          setConfirmDialog({
-                            isOpen: true,
-                            title: 'Remove Panel',
-                            message: 'Remove this panel?',
-                            danger: false,
-                            onConfirm: () => removePanel(p.id)
-                          })
-                        }}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {/* Per-panel query selector */}
-                  <div className="mb-2 space-y-1">
-                    <div className="space-y-1">
-                      <label className="text-xs text-white/70 block">Query:</label>
-                      <select
-                        data-panel-id={p.id}
-                        value={p.queryId || ''}
-                        onChange={(e) => updatePanelQuery(p.id, e.target.value || undefined)}
-                        className="w-full bg-black/30 rounded px-2 py-1 text-white text-xs"
-                      >
-                        <option value="">— No query —</option>
-                        {(() => {
-                          const expected = getExpectedShape(p.type)
-                          const compatible: SavedQuery[] = []
-                          const incompatible: SavedQuery[] = []
-                          
-                          queries.forEach((q) => {
-                            const shape: QueryShape = q.shapeHint || 'unknown'
-                            const isCompatible = isShapeCompatible(shape, p.type)
-                            if (isCompatible) {
-                              compatible.push(q)
-                            } else {
-                              incompatible.push(q)
-                            }
-                          })
-                          
-                          return (
-                            <>
-                              {compatible.length > 0 && (
-                                <optgroup label="✓ Compatible">
-                                  {compatible.map((q) => (
-                                    <option key={q.id} value={q.id}>
-                                      {q.name} {q.shapeHint && `[${getShapeLabel(q.shapeHint)}]`}
-                                    </option>
-                                  ))}
-                                </optgroup>
-                              )}
-                              {incompatible.length > 0 && (
-                                <optgroup label="⚠ Incompatible">
-                                  {incompatible.map((q) => (
-                                    <option key={q.id} value={q.id} disabled={false}>
-                                      {q.name} {q.shapeHint && `[${getShapeLabel(q.shapeHint)}]`}
-                                    </option>
-                                  ))}
-                                </optgroup>
-                              )}
-                            </>
-                          )
-                        })()}
-                      </select>
-                      {!p.queryId && (
-                        <p className="text-xs text-white/50 italic mt-1">{getPanelHint(p.type)}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Refresh interval */}
-                  <div className="mb-2">
-                    <label className="text-xs text-white/70 block">Refresh (sec):</label>
-                    <input
-                      type="number"
-                      min="5"
-                      max="86400"
-                      value={p.refreshSec || 30}
-                      onChange={(e) => updatePanelRefresh(p.id, e.target.value ? parseInt(e.target.value) : undefined)}
-                      className="w-full bg-black/30 rounded px-2 py-1 text-white text-xs"
-                    />
-                  </div>
-
-                  <PanelRenderer 
-                    type={p.type} 
-                    query={query || null} 
-                    refreshSec={p.refreshSec} 
-                    config={p.config}
-                    onQueryChange={() => {
-                      // Scroll to panel or highlight query selector - could be enhanced
-                      const selectEl = document.querySelector(`select[data-panel-id="${p.id}"]`) as HTMLSelectElement
-                      if (selectEl) {
-                        selectEl.focus()
-                        selectEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                      }
-                    }}
-                  />
-                </div>
-              )
-            })}
-          </div>
-        </>
-      )}
-
-      {/* Modals */}
       <AlertDialog
         isOpen={alertDialog.isOpen}
         onClose={() => setAlertDialog({ ...alertDialog, isOpen: false })}
@@ -489,7 +725,7 @@ export default function DashboardEditor() {
         message={alertDialog.message}
         variant={alertDialog.variant}
       />
-      
+
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}
         onClose={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
@@ -498,7 +734,7 @@ export default function DashboardEditor() {
         message={confirmDialog.message}
         danger={confirmDialog.danger}
       />
-      
+
       <PromptDialog
         isOpen={promptDialog.isOpen}
         onClose={() => setPromptDialog({ ...promptDialog, isOpen: false })}

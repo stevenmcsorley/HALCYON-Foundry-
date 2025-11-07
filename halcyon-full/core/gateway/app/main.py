@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from ariadne.asgi import GraphQL
-from ariadne import make_executable_schema, load_schema_from_path
+from ariadne import make_executable_schema, load_schema_from_path, ScalarType
 import uuid
 from .config import settings
 from .clients import OntologyClient, PolicyClient
@@ -15,6 +15,7 @@ from .resolvers_alerts import alerts_query, alerts_mutation
 from .resolvers_cases import cases_query, cases_mutation, case_type
 from .resolvers_feedback import feedback_query, feedback_mutation
 from .resolvers_actions import actions_query, actions_mutation
+from .resolvers_bindings import bindings_query, bindings_mutation
 from .ws_pubsub import register_ws
 from .health import router as health_router
 from .routes_federation import router as federation_router
@@ -25,6 +26,7 @@ from .routes_maintenance import router as maintenance_router
 from .routes_cases import router as cases_router
 from .routes_feedback import router as feedback_router
 from .routes_actions import router as actions_router
+from .routes_bindings import router as bindings_router, bindings_alerts_router
 from .retry_worker import start_retry_worker
 from .db import init_db, close_pool
 from .logging import setup_logging
@@ -35,10 +37,26 @@ import asyncio
 setup_logging()
 
 type_defs = load_schema_from_path("app/schema.graphql")
+
+datetime_scalar = ScalarType("DateTime")
+
+
+@datetime_scalar.serializer
+def serialize_datetime(value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
+
+
 schema = make_executable_schema(
     type_defs,
-    [query, fed_query, saved_query_resolver, alerts_query, cases_query, feedback_query, actions_query, case_type],
-    [mutation, saved_mutation, alerts_mutation, cases_mutation, feedback_mutation, actions_mutation]
+    [query, fed_query, saved_query_resolver, alerts_query, cases_query, feedback_query, actions_query, bindings_query, case_type],
+    [mutation, saved_mutation, alerts_mutation, cases_mutation, feedback_mutation, actions_mutation, bindings_mutation],
+    datetime_scalar,
 )
 
 app = FastAPI(title="HALCYON Gateway", version="0.1.0")
@@ -112,6 +130,8 @@ app.include_router(maintenance_router)
 app.include_router(cases_router)
 app.include_router(feedback_router)
 app.include_router(actions_router)
+app.include_router(bindings_router)
+app.include_router(bindings_alerts_router)
 
 @app.on_event("startup")
 async def startup():

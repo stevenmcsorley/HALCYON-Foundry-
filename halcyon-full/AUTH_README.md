@@ -1,92 +1,29 @@
 # HALCYON Foundry Core – Authentication Guide
 
-This document explains how to use **DEV_MODE** (mock token login) or full **Keycloak OIDC** authentication.
+HALCYON relies exclusively on **Keycloak OIDC** for authentication across environments. Mock login flows have been removed to keep the platform aligned with production behaviour.
 
 ---
 
-## 🔐 Modes Overview
+## 🔐 Architecture Overview
 
-| Mode | Purpose | Requirements |
-|------|----------|--------------|
-| **DEV_MODE (Mock Token)** | Local development, no Keycloak required | None |
-| **OIDC Mode (Keycloak)** | Production or full integration | Keycloak running in Docker |
+- **Identity Provider**: Keycloak (containerised in `deploy/keycloak`).
+- **Gateway Client**: `halcyon-gateway` – validates access tokens for API requests.
+- **UI Client**: `halcyon-ui` – handles browser login and token refresh.
+- **Realm**: `halcyon-dev` – ships with core roles (`viewer`, `analyst`, `admin`).
 
 ---
 
-## 🧩 DEV_MODE (Default)
+## ⚙️ Environment Variables
 
-### When to use
-
-For local development, testing, or CI environments without Keycloak.
-
-### How it works
-
-- The UI generates a mock JWT when you log in with any credentials.
-- Gateway injects default roles (`admin`, `analyst`) and skips OIDC validation.
-- Works offline and allows all routes.
-
-### Configuration
-
-#### Environment
+Configure the UI (Vite) and Gateway (FastAPI) with these values:
 
 ```env
 # UI
-VITE_DEV_MODE=true
-
-# Gateway
-DEV_MODE=true
-```
-
-#### Login
-
-In the browser:
-- **Username:** `admin`
-- **Password:** `admin`
-
-This creates a temporary mock token.
-
-#### Verify
-
-```bash
-curl -s http://localhost:8088/auth/user | jq .
-```
-
-Expected response:
-
-```json
-{
-  "sub": "admin",
-  "email": "admin@halcyon.local",
-  "roles": ["admin"]
-}
-```
-
----
-
-## 🧭 OIDC Mode (Keycloak Integration)
-
-### When to use
-
-For authenticated multi-user deployments with role-based access.
-
-### Requirements
-
-- Keycloak service running (`deploy/docker-compose.yml`)
-- Proper realm import (`deploy/keycloak/realm-export.json`)
-
-### Configuration
-
-#### Environment
-
-```env
-# UI
-VITE_DEV_MODE=false
 VITE_KEYCLOAK_URL=http://localhost:8089
 VITE_KEYCLOAK_REALM=halcyon-dev
 VITE_KEYCLOAK_CLIENT_ID=halcyon-ui
 
 # Gateway
-DEV_MODE=false
 KEYCLOAK_URL=http://keycloak:8080
 KEYCLOAK_REALM=halcyon-dev
 KEYCLOAK_CLIENT_ID=halcyon-gateway
@@ -94,25 +31,45 @@ OIDC_DISCOVERY_URL=http://keycloak:8080/realms/halcyon-dev/.well-known/openid-co
 JWT_ALGORITHM=RS256
 ```
 
-### Start Keycloak
+> Adjust hostnames if Keycloak runs outside the docker composition. The defaults assume `docker compose` with the Keycloak container accessible internally as `keycloak:8080` and exposed locally on `http://localhost:8089`.
+
+---
+
+## 🚀 Bring Keycloak Online
 
 ```bash
 cd deploy
 docker compose up -d keycloak
 ```
 
-Then open:
-- **URL:** http://localhost:8089
-- **Username:** `admin`
-- **Password:** `admin`
+Access the admin console to manage users and clients:
 
-### Verify Login
+- URL: http://localhost:8089
+- Username: `admin`
+- Password: `admin`
 
-1. Log in via the UI (redirects to Keycloak).
-2. Check Gateway auth:
+The bundled realm export (`deploy/keycloak/realm-export.json`) seeds default roles, groups, and client scopes.
+
+---
+
+## 🔑 Obtaining a Token
+
+### Browser Flow
+
+1. Navigate to the HALCYON UI (`http://localhost:5173`).
+2. Click **Log In** – you will be redirected to Keycloak.
+3. Authenticate with your Keycloak credentials.
+4. After redirect back to the UI, the access token and refresh token are stored in browser storage.
+
+### Service-to-Service (Password Grant)
 
 ```bash
-TOKEN="<paste your JWT>"
+TOKEN=$(curl -s \
+  -X POST http://localhost:8089/realms/halcyon-dev/protocol/openid-connect/token \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'grant_type=password&client_id=halcyon-ui&username=<user>&password=<pass>' \
+  | jq -r '.access_token')
+
 curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8088/auth/user | jq .
 ```
 
@@ -120,7 +77,7 @@ Expected response:
 
 ```json
 {
-  "sub": "uuid-of-user",
+  "sub": "2455deb8-e6ad-4adb-a06a-b00dd598c377",
   "email": "admin@halcyon.dev",
   "roles": ["admin", "analyst"]
 }
@@ -128,128 +85,32 @@ Expected response:
 
 ---
 
-## 🧪 Switching Between Modes
+## ✅ Verification Checklist
 
-| Action | DEV_MODE | OIDC |
-|--------|----------|------|
-| **Enable DEV_MODE** | `VITE_DEV_MODE=true` + `DEV_MODE=true` | - |
-| **Switch to OIDC** | - | Set both to `false`, start Keycloak |
-| **Restart containers** | `docker compose up -d --build` | `docker compose up -d --build keycloak gateway ui` |
-
----
-
-## ✅ Quick Verify (DEV_MODE path)
-
-1. Open the UI → click Login → use `admin` / `admin`.
-2. In browser devtools, confirm requests carry `Authorization: Bearer <mock>` (DEV_MODE token).
-3. Hit Gateway from your terminal:
-
-```bash
-curl -s http://localhost:8088/auth/user | jq .
-```
-
-You should see roles like `["admin"]`.
+1. **UI Login** – browser redirects to Keycloak and back successfully.
+2. **Gateway Health** – `curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8088/health` returns `ok`.
+3. **Role Propagation** – `GET /auth/user` reflects Keycloak role assignments.
+4. **WebSockets** – live UI channels (alerts, playbook audits) function with the same bearer token.
 
 ---
 
-## 🔁 Switch between DEV_MODE and real Keycloak
+## 🛠️ Troubleshooting
 
-### DEV_MODE ON (mock token):
-- UI env: `VITE_DEV_MODE=true`
-- Gateway env: `DEV_MODE=true`
-- Keycloak container: not required
-
-### Keycloak ON (real JWT):
-1. Bring up Keycloak:
-   ```bash
-   cd deploy && docker compose up -d keycloak
-   ```
-2. UI env: `VITE_DEV_MODE=false`
-3. Gateway env: `DEV_MODE=false`
-4. Set these for Gateway:
-   - `KEYCLOAK_URL=http://keycloak:8080`
-   - `KEYCLOAK_REALM=halcyon-dev`
-   - `KEYCLOAK_CLIENT_ID=halcyon-gateway`
-5. Rebuild/restart gateway and ui.
+| Symptom | Likely Cause | Resolution |
+|---------|--------------|------------|
+| Login loop / redirect error | Client IDs mismatch between UI env and Keycloak | Ensure `VITE_KEYCLOAK_CLIENT_ID` and `KEYCLOAK_CLIENT_ID` match Keycloak configuration |
+| `invalid_grant` on token request | Wrong credentials or confidential client missing secret | Reset credentials or configure client access type appropriately |
+| 401 from Gateway | Token expired or JWKS endpoint unreachable | Re-authenticate, confirm `OIDC_DISCOVERY_URL` is reachable from gateway container |
+| WebSocket unauthorized | Token missing from initial connection | Include `Authorization: Bearer <token>` header when establishing WS connection |
 
 ---
 
-## 🧪 Two quick auth-path smoke tests
+## 📂 Reference Files
 
-### DEV_MODE path
+- `core/gateway/app/auth.py` – JWT verification helpers.
+- `core/gateway/app/middleware.py` – authentication middleware enforcing bearer tokens.
+- `core/enrichment/app/auth.py` – enrichment service auth helper.
+- `deploy/docker-compose.yml` – service definitions & environment variables.
+- `deploy/keycloak/` – realm export, bootstrap scripts, admin credentials.
 
-```bash
-# should return user with roles (no Keycloak needed)
-curl -s http://localhost:8088/auth/user | jq .
-```
-
-### OIDC path (once Keycloak is on)
-
-1. Login via UI (redirect to Keycloak).
-2. Verify Gateway accepts JWT:
-
-```bash
-# paste the access token from your browser storage
-TOKEN="eyJ..." 
-curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8088/auth/user | jq .
-```
-
----
-
-## 🧷 Gotchas to avoid later
-
-- Keep Authorization in headers (no cookies needed).
-- Don't leave `admin/admin` enabled outside DEV_MODE.
-- If WS ever fails after switching modes, confirm `VITE_GATEWAY_WS_URL` points to the same host you're using for the UI (or derive from `VITE_GATEWAY_URL`).
-
----
-
-## 🧷 Common Issues
-
-| Problem | Likely Cause | Fix |
-|---------|--------------|-----|
-| Login fails in DEV_MODE | `VITE_DEV_MODE` missing or false | Add to `.env` or `docker-compose.yml` |
-| 401 from Gateway | Token expired or Keycloak down | Refresh login or restart Keycloak |
-| WebSocket unauthorized | Gateway WS inherits same Authorization header | Reconnect after token refresh |
-| Realm not importing | Adjust `deploy/keycloak/init.sh` for import timing | Delay startup until Keycloak is ready |
-
----
-
-## 🛠️ Files Involved
-
-- `core/gateway/app/auth.py` - OIDC discovery and JWT verification
-- `core/gateway/app/middleware.py` - JWT token extraction middleware
-- `core/gateway/app/config.py` - Auth configuration
-- `ui/src/services/auth.ts` - UI auth service with login/logout
-- `ui/src/store/authStore.ts` - Zustand auth state store
-- `ui/src/components/LoginForm.tsx` - Login UI component
-- `ui/src/components/UserMenu.tsx` - User menu with logout
-- `deploy/keycloak/realm-export.json` - Keycloak realm configuration
-- `deploy/keycloak/init.sh` - Realm import script
-- `deploy/docker-compose.yml` - Service configuration
-
----
-
-## 🧭 Verification Commands
-
-```bash
-# Gateway health + auth
-curl -s http://localhost:8088/health | jq .
-curl -s http://localhost:8088/auth/user | jq .
-
-# OIDC discovery check
-curl -s http://localhost:8089/realms/halcyon-dev/.well-known/openid-configuration | jq .
-```
-
----
-
-## 📝 Notes
-
-- DEV_MODE remains safe for local use but must be disabled for staging/production.
-- JWT validation uses cached JWKS keys; restart Gateway if Keycloak keys rotate.
-- Roles are extracted from `realm_access.roles` and `resource_access.{client}.roles`.
-- Gateway middleware injects user context into GraphQL resolvers via `context["user"]`.
-
----
-
-© HALCYON Foundry Core — Authentication Guide
+Need help? Contact platform-engineering@halcyon.dev.

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
-from typing import List
+from typing import List, Optional, Set
 from uuid import UUID
 import asyncpg
 import json
@@ -147,10 +147,30 @@ async def list_dashboards(request: Request):
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT id, name, owner, created_at, updated_at FROM dashboards WHERE owner = $1 ORDER BY updated_at DESC",
+            """
+            SELECT id, name, owner, created_at, updated_at, config, is_default
+            FROM dashboards
+            WHERE owner = $1
+            ORDER BY updated_at DESC
+            """,
             owner
         )
-        return [Dashboard(**dict(row)) for row in rows]
+
+        dashboards = []
+        for row in rows:
+            data = dict(row)
+            config_val = data.get("config")
+            if isinstance(config_val, str):
+                try:
+                    data["config"] = json.loads(config_val)
+                except json.JSONDecodeError:
+                    data["config"] = {}
+            elif config_val is None:
+                data["config"] = {}
+
+            dashboards.append(Dashboard(**data))
+
+        return dashboards
 
 
 @dashboard_router.post("", response_model=Dashboard, status_code=201)
@@ -160,13 +180,19 @@ async def create_dashboard(dashboard: DashboardCreate, request: Request):
     pool = await get_pool()
     async with pool.acquire() as conn:
         try:
+            config_json = json.dumps(dashboard.config or {})
+            if dashboard.is_default:
+                await conn.execute(
+                    "UPDATE dashboards SET is_default = FALSE WHERE owner = $1",
+                    owner
+                )
             row = await conn.fetchrow(
                 """
-                INSERT INTO dashboards (name, owner)
-                VALUES ($1, $2)
-                RETURNING id, name, owner, created_at, updated_at
+                INSERT INTO dashboards (name, owner, config, is_default)
+                VALUES ($1, $2, $3::jsonb, $4)
+                RETURNING id, name, owner, created_at, updated_at, config, is_default
                 """,
-                dashboard.name, owner
+                dashboard.name, owner, config_json, dashboard.is_default
             )
             return Dashboard(**dict(row))
         except asyncpg.UniqueViolationError:
@@ -181,13 +207,23 @@ async def get_dashboard(dashboard_id: UUID, request: Request):
     async with pool.acquire() as conn:
         # Get dashboard
         row = await conn.fetchrow(
-            "SELECT id, name, owner, created_at, updated_at FROM dashboards WHERE id = $1 AND owner = $2",
+            "SELECT id, name, owner, created_at, updated_at, config, is_default FROM dashboards WHERE id = $1 AND owner = $2",
             dashboard_id, owner
         )
         if not row:
             raise HTTPException(status_code=404, detail="Dashboard not found")
-        
-        dashboard = Dashboard(**dict(row))
+
+        dashboard_data = dict(row)
+        config_val = dashboard_data.get("config")
+        if isinstance(config_val, str):
+            try:
+                dashboard_data["config"] = json.loads(config_val)
+            except json.JSONDecodeError:
+                dashboard_data["config"] = {}
+        elif config_val is None:
+            dashboard_data["config"] = {}
+
+        dashboard = Dashboard(**dashboard_data)
         
         # Get panels
         panel_rows = await conn.fetch(
@@ -202,7 +238,14 @@ async def get_dashboard(dashboard_id: UUID, request: Request):
         panels = []
         for p_row in panel_rows:
             p_dict = dict(p_row)
-            p_dict["config_json"] = json.loads(p_dict["config_json"]) if isinstance(p_dict["config_json"], str) else p_dict["config_json"]
+            config_json_val = p_dict.get("config_json")
+            if isinstance(config_json_val, str):
+                try:
+                    p_dict["config_json"] = json.loads(config_json_val)
+                except json.JSONDecodeError:
+                    p_dict["config_json"] = {}
+            elif config_json_val is None:
+                p_dict["config_json"] = {}
             panels.append(DashboardPanel(**p_dict))
         
         return DashboardWithPanels(**dashboard.model_dump(), panels=panels)
@@ -214,27 +257,83 @@ async def update_dashboard(dashboard_id: UUID, dashboard: DashboardUpdate, reque
     owner = get_owner(request)
     pool = await get_pool()
     async with pool.acquire() as conn:
-        if dashboard.name is None:
+        updates = []
+        values = []
+        pos = 1
+
+        if dashboard.name is not None:
+            updates.append(f"name = ${pos}")
+            values.append(dashboard.name)
+            pos += 1
+
+        if dashboard.config is not None:
+            updates.append(f"config = ${pos}::jsonb")
+            values.append(json.dumps(dashboard.config or {}))
+            pos += 1
+
+        if dashboard.is_default is not None:
+            updates.append(f"is_default = ${pos}")
+            values.append(dashboard.is_default)
+            pos += 1
+
+        if not updates:
             row = await conn.fetchrow(
-                "SELECT id, name, owner, created_at, updated_at FROM dashboards WHERE id = $1 AND owner = $2",
+                "SELECT id, name, owner, created_at, updated_at, config, is_default FROM dashboards WHERE id = $1 AND owner = $2",
                 dashboard_id, owner
             )
             if not row:
                 raise HTTPException(status_code=404, detail="Dashboard not found")
             return Dashboard(**dict(row))
-        
+
+        # If setting as default, clear other defaults first
+        if dashboard.is_default:
+            await conn.execute(
+                "UPDATE dashboards SET is_default = FALSE WHERE owner = $1",
+                owner
+            )
+
+        updates.append(f"updated_at = CURRENT_TIMESTAMP")
+        values.extend([dashboard_id, owner])
+
         row = await conn.fetchrow(
-            """
+            f"""
             UPDATE dashboards
-            SET name = $1, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $2 AND owner = $3
-            RETURNING id, name, owner, created_at, updated_at
+            SET {', '.join(updates)}
+            WHERE id = ${pos} AND owner = ${pos + 1}
+            RETURNING id, name, owner, created_at, updated_at, config, is_default
             """,
-            dashboard.name, dashboard_id, owner
+            *values
         )
         if not row:
             raise HTTPException(status_code=404, detail="Dashboard not found")
         return Dashboard(**dict(row))
+
+
+@dashboard_router.post("/{dashboard_id}/set-default", status_code=204)
+async def set_default_dashboard(dashboard_id: UUID, request: Request):
+    """Mark a dashboard as the default for the owner."""
+    owner = get_owner(request)
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                "SELECT id FROM dashboards WHERE id = $1 AND owner = $2",
+                dashboard_id, owner
+            )
+            if not row:
+                raise HTTPException(status_code=404, detail="Dashboard not found")
+
+            await conn.execute(
+                "UPDATE dashboards SET is_default = FALSE WHERE owner = $1",
+                owner
+            )
+
+            await conn.execute(
+                "UPDATE dashboards SET is_default = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND owner = $2",
+                dashboard_id, owner
+            )
+
+    return None
 
 
 @dashboard_router.delete("/{dashboard_id}", status_code=204)
@@ -266,6 +365,22 @@ async def create_panel(dashboard_id: UUID, panel: DashboardPanelCreate, request:
         )
         if not dash_row:
             raise HTTPException(status_code=404, detail="Dashboard not found")
+        
+        query_id = panel.config_json.get("queryId") if panel.config_json else None
+        if query_id:
+            query_row = await conn.fetchrow(
+                "SELECT shape_hint FROM saved_queries WHERE id = $1 AND owner = $2",
+                query_id, owner
+            )
+            if not query_row:
+                raise HTTPException(status_code=400, detail="Query not found or not owned by user")
+            shape_hint = query_row["shape_hint"]
+            if not _is_shape_compatible(panel.type, shape_hint):
+                allowed = ", ".join(sorted(ALLOWED_PANEL_SHAPES.get(panel.type, {'unknown'})))
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Query shape '{shape_hint}' is incompatible with panel type '{panel.type}'. Allowed shapes: {allowed}"
+                )
         
         row = await conn.fetchrow(
             """
@@ -329,6 +444,31 @@ async def update_panel(dashboard_id: UUID, panel_id: UUID, panel: DashboardPanel
             p_dict["config_json"] = json.loads(p_dict["config_json"]) if isinstance(p_dict["config_json"], str) else p_dict["config_json"]
             return DashboardPanel(**p_dict)
         
+        # Validate query assignment if provided
+        if panel.config_json and "queryId" in panel.config_json:
+            query_id = panel.config_json.get("queryId")
+            if query_id:
+                query_row = await conn.fetchrow(
+                    "SELECT shape_hint FROM saved_queries WHERE id = $1 AND owner = $2",
+                    query_id, owner
+                )
+                if not query_row:
+                    raise HTTPException(status_code=400, detail="Query not found or not owned by user")
+                shape_hint = query_row["shape_hint"]
+                existing_row = await conn.fetchrow(
+                    "SELECT type FROM dashboard_panels WHERE id = $1 AND dashboard_id = $2",
+                    panel_id, dashboard_id
+                )
+                if not existing_row:
+                    raise HTTPException(status_code=404, detail="Panel not found")
+                panel_type = panel.type or existing_row["type"]
+                if not _is_shape_compatible(panel_type, shape_hint):
+                    allowed = ", ".join(sorted(ALLOWED_PANEL_SHAPES.get(panel_type, {'unknown'})))
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Query shape '{shape_hint}' is incompatible with panel type '{panel_type}'. Allowed shapes: {allowed}"
+                    )
+
         updates.append(f"updated_at = CURRENT_TIMESTAMP")
         values.extend([panel_id, dashboard_id])
         

@@ -1,9 +1,5 @@
 import React, { useEffect, useState } from 'react'
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
-import { MapPanel } from './modules/map'
-import { GraphPanel } from './modules/graph'
-import { ListPanel } from './modules/list'
-import { TimelinePanel } from './modules/timeline'
 import EntityInspector from './components/EntityInspector'
 import LoginForm from './components/LoginForm'
 import UserMenu from './components/UserMenu'
@@ -15,6 +11,11 @@ import { PlaybookStudio } from './modules/playbooks/PlaybookStudio'
 import { NotificationBell } from './components/NotificationBell'
 import { useAuthStore } from './store/authStore'
 import { useCasesStore } from './store/casesStore'
+import { useAlertsStore } from './store/alertsStore'
+import { useSavedStore } from './store/savedStore'
+import { ConsoleSummary } from './modules/console/ConsoleSummary'
+import { ConsoleQuickActions } from './modules/console/ConsoleQuickActions'
+import DashboardConsoleView from './modules/dashboards/DashboardConsoleView'
 import * as auth from './services/auth'
 import { Toast, subscribeToToast } from './components/Toast'
 
@@ -22,7 +23,16 @@ type Tab = 'console' | 'saved' | 'dashboards' | 'alerts' | 'cases' | 'playbooks'
 
 function MainLayout() {
   const { user } = useAuthStore()
-  const { setSelected, get } = useCasesStore()
+  const setSelected = useCasesStore((state) => state.setSelected)
+  const fetchCase = useCasesStore((state) => state.get)
+  const listCases = useCasesStore((state) => state.list)
+  const cases = useCasesStore((state) => state.items)
+  const alerts = useAlertsStore((state) => state.alerts)
+  const loadAlerts = useAlertsStore((state) => state.load)
+  const savedQueries = useSavedStore((state) => state.queries)
+  const dashboards = useSavedStore((state) => state.dashboards)
+  const loadSavedQueries = useSavedStore((state) => state.loadQueries)
+  const loadDashboards = useSavedStore((state) => state.loadDashboards)
   const navigate = useNavigate()
   const location = useLocation()
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -54,6 +64,14 @@ function MainLayout() {
     return unsubscribe
   }, [])
 
+  useEffect(() => {
+    loadAlerts().catch(() => undefined)
+    listCases({ limit: 100 }).catch(() => undefined)
+    loadSavedQueries().catch(() => undefined)
+    loadDashboards().catch(() => undefined)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Handle navigation events between tabs
   useEffect(() => {
     const handleNavigateToCases = async (e: Event) => {
@@ -61,7 +79,7 @@ function MainLayout() {
       navigate('/cases')
       if (customEvent.detail?.caseId) {
         try {
-          const caseData = await get(customEvent.detail.caseId)
+          const caseData = await fetchCase(customEvent.detail.caseId)
           setSelected(caseData)
         } catch (err) {
           // Silent error - case might not exist
@@ -81,7 +99,31 @@ function MainLayout() {
       window.removeEventListener('navigate-to-cases', handleNavigateToCases)
       window.removeEventListener('navigate-to-alerts', handleNavigateToAlerts)
     }
-  }, [get, setSelected, navigate])
+  }, [fetchCase, setSelected, navigate])
+
+  const openAlerts = alerts.filter((alert) => alert.status === 'open')
+  const highSeverityAlerts = openAlerts.filter((alert) => alert.severity === 'high').length
+  const activeCases = cases.filter((item) => item.status === 'open' || item.status === 'in_progress')
+  const summaryCards = [
+    {
+      title: 'Open Alerts',
+      value: openAlerts.length.toString(),
+      hint: `${highSeverityAlerts} high severity`,
+      accentClass: 'text-emerald-300',
+    },
+    {
+      title: 'Active Cases',
+      value: activeCases.length.toString(),
+      hint: `${cases.length} total`,
+      accentClass: 'text-sky-300',
+    },
+    {
+      title: 'Dashboards / Queries',
+      value: `${dashboards.length} / ${savedQueries.length}`,
+      hint: 'curated views & saved queries',
+      accentClass: 'text-purple-300',
+    },
+  ]
 
   return (
     <div className="min-h-screen bg-surface text-white">
@@ -179,19 +221,17 @@ function MainLayout() {
           path="/"
           element={
             <>
-              <div className="grid grid-cols-2 grid-rows-2 h-[calc(100vh-8rem)] gap-4 p-4">
-                <div className="border-r border-white/10 pr-4 flex flex-col min-h-0">
-                  <MapPanel />
+              <div className="h-[calc(100vh-8rem)] flex flex-col overflow-hidden">
+                <div className="p-4 pb-2">
+                  <ConsoleSummary cards={summaryCards} />
                 </div>
-                <div className="pl-4 flex flex-col min-h-0">
-                  <GraphPanel />
+                <div className="px-4 pb-2">
+                  <ConsoleQuickActions />
                 </div>
-                
-                <div className="border-r border-white/10 pr-4 flex flex-col min-h-0 border-t border-white/10 pt-4">
-                  <ListPanel />
-                </div>
-                <div className="pl-4 flex flex-col min-h-0 border-t border-white/10 pt-4">
-                  <TimelinePanel />
+                <div className="flex-1 min-h-0 overflow-auto px-4 pb-4">
+                  <div className="min-h-full">
+                    <DashboardConsoleView />
+                  </div>
                 </div>
               </div>
               <EntityInspector />

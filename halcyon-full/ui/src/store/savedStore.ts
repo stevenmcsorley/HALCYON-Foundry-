@@ -1,12 +1,13 @@
 import { create } from 'zustand'
 import * as auth from '@/services/auth'
+import { QueryShape } from '@/lib/queryShapes'
 
 export type SavedQuery = {
   id: string
   name: string
   gql: string
   owner?: string
-  shapeHint?: 'entities' | 'counts' | 'metric' | 'geo' | 'items' | 'unknown'
+  shapeHint?: QueryShape
   createdAt?: string
   updatedAt?: string
 }
@@ -30,6 +31,7 @@ export type Dashboard = {
   owner?: string
   visibilityRoles?: string[]
   config?: Record<string, unknown>
+  isDefault?: boolean
   createdAt?: string
   updatedAt?: string
 }
@@ -52,6 +54,66 @@ async function j<T>(res: Response): Promise<T> {
   return res.json()
 }
 
+function mapSavedQuery(raw: any): SavedQuery {
+  return {
+    id: raw.id,
+    name: raw.name,
+    gql: raw.gql,
+    owner: raw.owner,
+    shapeHint: raw.shape_hint ?? undefined,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+  }
+}
+
+function mapDashboard(raw: any): Dashboard {
+  const rawConfig = raw.config ?? raw.config_json ?? {}
+  const config = typeof rawConfig === 'string' ? safeJsonParse(rawConfig) : (rawConfig ?? {})
+  const configObj = (config || {}) as Record<string, unknown>
+  const inferredDefault = typeof configObj.isDefault === 'boolean'
+    ? Boolean(configObj.isDefault)
+    : false
+  const isDefault = raw.is_default ?? raw.isDefault ?? inferredDefault
+
+  return {
+    id: raw.id,
+    name: raw.name,
+    owner: raw.owner,
+    visibilityRoles: raw.visibility_roles ?? raw.visibilityRoles,
+    config,
+    isDefault: Boolean(isDefault),
+    createdAt: raw.created_at ?? raw.createdAt,
+    updatedAt: raw.updated_at ?? raw.updatedAt,
+  }
+}
+
+function mapPanel(raw: any): DashboardPanel {
+  const rawConfig = raw.config ?? raw.config_json ?? raw.configJson ?? {}
+  const config = typeof rawConfig === 'string' ? safeJsonParse(rawConfig) : (rawConfig ?? {})
+  const configObj = (config || {}) as Record<string, unknown>
+
+  return {
+    id: raw.id,
+    dashboardId: raw.dashboard_id ?? raw.dashboardId,
+    title: raw.title,
+    type: raw.type,
+    refreshSec: (raw.refreshSec ?? configObj.refreshSec ?? raw.config?.refreshSec ?? raw.config_json?.refreshSec) as number | undefined,
+    queryId: (raw.queryId ?? configObj.queryId ?? raw.config?.queryId ?? raw.config_json?.queryId) as string | undefined,
+    config,
+    position: raw.position ?? 0,
+  }
+}
+
+function safeJsonParse(value: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch (err) {
+    console.warn('Failed to parse dashboard config JSON', err)
+    return {}
+  }
+}
+
 function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   const token = auth.getToken()
@@ -63,21 +125,31 @@ function getAuthHeaders(): Record<string, string> {
 
 export const savedApi = {
   getQueries: (): Promise<SavedQuery[]> => 
-    fetch(`${API}/saved-queries`, { headers: getAuthHeaders() }).then(j),
+    fetch(`${API}/saved-queries`, { headers: getAuthHeaders() })
+      .then(j)
+      .then((rows: any[]) => rows.map(mapSavedQuery)),
   
-  createQuery: (q: Pick<SavedQuery, 'name' | 'gql'>): Promise<SavedQuery> =>
+  createQuery: (q: Pick<SavedQuery, 'name' | 'gql'> & { shapeHint?: QueryShape }): Promise<SavedQuery> =>
     fetch(`${API}/saved-queries`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify(q),
-    }).then(j),
+      body: JSON.stringify({
+        name: q.name,
+        gql: q.gql,
+        shape_hint: q.shapeHint ?? null,
+      }),
+    }).then(j).then(mapSavedQuery),
   
   updateQuery: (id: string, p: Partial<SavedQuery>): Promise<SavedQuery> =>
     fetch(`${API}/saved-queries/${id}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
-      body: JSON.stringify(p),
-    }).then(j),
+      body: JSON.stringify({
+        ...(p.name !== undefined ? { name: p.name } : {}),
+        ...(p.gql !== undefined ? { gql: p.gql } : {}),
+        ...(p.shapeHint !== undefined ? { shape_hint: p.shapeHint } : {}),
+      }),
+    }).then(j).then(mapSavedQuery),
   
   deleteQuery: (id: string): Promise<void> =>
     fetch(`${API}/saved-queries/${id}`, {
@@ -85,22 +157,38 @@ export const savedApi = {
       headers: getAuthHeaders(),
     }).then(() => undefined),
 
-  getDashboards: (): Promise<Dashboard[]> => 
-    fetch(`${API}/dashboards`, { headers: getAuthHeaders() }).then(j),
+  getDashboards: (): Promise<Dashboard[]> =>
+    fetch(`${API}/dashboards`, { headers: getAuthHeaders() })
+      .then(j)
+      .then((rows: any[]) => rows.map(mapDashboard)),
   
-  createDashboard: (d: Pick<Dashboard, 'name'>): Promise<Dashboard> =>
+  createDashboard: (d: Pick<Dashboard, 'name'> & { config?: Record<string, unknown>; isDefault?: boolean }): Promise<Dashboard> =>
     fetch(`${API}/dashboards`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify(d),
-    }).then(j),
+      body: JSON.stringify({
+        name: d.name,
+        config: d.config ?? {},
+        is_default: d.isDefault ?? false,
+      }),
+    }).then(j).then(mapDashboard),
   
   updateDashboard: (id: string, p: Partial<Dashboard>): Promise<Dashboard> =>
     fetch(`${API}/dashboards/${id}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
-      body: JSON.stringify(p),
-    }).then(j),
+      body: JSON.stringify({
+        ...(p.name !== undefined && { name: p.name }),
+        ...(p.config !== undefined && { config: p.config ?? {} }),
+        ...(p.isDefault !== undefined && { is_default: p.isDefault }),
+      }),
+    }).then(j).then(mapDashboard),
+
+  setDefaultDashboard: (id: string): Promise<void> =>
+    fetch(`${API}/dashboards/${id}/set-default`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    }).then(() => undefined),
   
   deleteDashboard: (id: string): Promise<void> =>
     fetch(`${API}/dashboards/${id}`, {
@@ -109,15 +197,15 @@ export const savedApi = {
     }).then(() => undefined),
 
   getDashboard: (id: string): Promise<Dashboard & { panels: DashboardPanel[] }> =>
-    fetch(`${API}/dashboards/${id}`, { headers: getAuthHeaders() }).then(j).then((d: any) => ({
-      ...d,
-      panels: (d.panels || []).map((p: any) => ({
-        ...p,
-        queryId: p.config?.queryId || p.config_json?.queryId,
-        refreshSec: p.config?.refreshSec || p.config_json?.refreshSec,
-        config: p.config || p.config_json || {},
-      })),
-    })),
+    fetch(`${API}/dashboards/${id}`, { headers: getAuthHeaders() })
+      .then(j)
+      .then((d: any) => {
+        const mapped = mapDashboard(d)
+        return {
+          ...mapped,
+          panels: (d.panels || []).map(mapPanel),
+        }
+      }),
 
   createPanel: (dashboardId: string, p: Omit<DashboardPanel, 'id' | 'dashboardId'>): Promise<DashboardPanel> =>
     fetch(`${API}/dashboards/${dashboardId}/panels`, {
@@ -134,12 +222,7 @@ export const savedApi = {
           refreshSec: p.refreshSec,
         },
       }),
-    }).then(j).then((resp: any) => ({
-      ...resp,
-      queryId: resp.config?.queryId || resp.config_json?.queryId,
-      refreshSec: resp.config?.refreshSec || resp.config_json?.refreshSec,
-      config: resp.config || resp.config_json || {},
-    })),
+    }).then(j).then(mapPanel),
   
   updatePanel: (dashboardId: string, panelId: string, p: Partial<DashboardPanel>): Promise<DashboardPanel> =>
     fetch(`${API}/dashboards/${dashboardId}/panels/${panelId}`, {
@@ -157,12 +240,7 @@ export const savedApi = {
           },
         }),
       }),
-    }).then(j).then((resp: any) => ({
-      ...resp,
-      queryId: resp.config?.queryId || resp.config_json?.queryId,
-      refreshSec: resp.config?.refreshSec || resp.config_json?.refreshSec,
-      config: resp.config || resp.config_json || {},
-    })),
+    }).then(j).then(mapPanel),
   
   deletePanel: (dashboardId: string, panelId: string): Promise<void> =>
     fetch(`${API}/dashboards/${dashboardId}/panels/${panelId}`, {
@@ -177,10 +255,12 @@ type SavedState = {
   panels: Record<string, DashboardPanel[]> // by dashboardId
   loading: boolean
   error?: string
+  defaultDashboardId: string | null
   loadAll: () => Promise<void>
   loadQueries: () => Promise<void>
   loadDashboards: () => Promise<void>
   loadPanels: (dashboardId: string) => Promise<void>
+  setDefaultDashboard: (dashboardId: string | null) => Promise<void>
 }
 
 export const useSavedStore = create<SavedState>((set, get) => ({
@@ -188,12 +268,14 @@ export const useSavedStore = create<SavedState>((set, get) => ({
   dashboards: [],
   panels: {},
   loading: false,
+  defaultDashboardId: null,
 
   async loadAll() {
     set({ loading: true })
     try {
       const [qs, ds] = await Promise.all([savedApi.getQueries(), savedApi.getDashboards()])
-      set({ queries: qs, dashboards: ds, loading: false })
+      const defaultDashboard = ds.find((d) => d.isDefault)
+      set({ queries: qs, dashboards: ds, defaultDashboardId: defaultDashboard?.id ?? null, loading: false })
     } catch (e: any) {
       set({ loading: false, error: String(e?.message || e) })
     }
@@ -208,24 +290,82 @@ export const useSavedStore = create<SavedState>((set, get) => ({
   },
 
   async loadDashboards() {
+    set({ loading: true })
     try {
-      set({ dashboards: await savedApi.getDashboards() })
+      const dashboards = await savedApi.getDashboards()
+      const defaultDashboard = dashboards.find((d) => d.isDefault)
+      set({ dashboards, defaultDashboardId: defaultDashboard?.id ?? null, loading: false })
     } catch (e: any) {
-      set({ error: String(e?.message || e) })
+      set({ error: String(e?.message || e), loading: false })
     }
   },
 
   async loadPanels(dashboardId: string) {
+    set({ loading: true })
     try {
       const dashboard = await savedApi.getDashboard(dashboardId)
+      const { panels: fetchedPanels, ...meta } = dashboard
+      const dashboardsState = get().dashboards
+      const mergedDashboards = dashboardsState.length
+        ? dashboardsState.map((d) => (d.id === dashboardId ? { ...d, ...meta } : d))
+        : [meta]
+      const defaultDashboard = mergedDashboards.find((d) => d.isDefault)
       set({
+        dashboards: mergedDashboards,
+        defaultDashboardId: defaultDashboard?.id ?? get().defaultDashboardId,
         panels: {
           ...get().panels,
-          [dashboardId]: dashboard.panels || []
-        }
+          [dashboardId]: fetchedPanels || []
+        },
+        loading: false
       })
     } catch (e: any) {
-      set({ error: String(e?.message || e) })
+      set({ error: String(e?.message || e), loading: false })
+    }
+  },
+
+  async setDefaultDashboard(dashboardId: string | null) {
+    const previousDefault = get().defaultDashboardId
+    const dashboardsState = get().dashboards
+
+    // Optimistic state update
+    const updatedDashboards = dashboardsState.map((d) => {
+      if (dashboardId && d.id === dashboardId) {
+        return { ...d, isDefault: true }
+      }
+      if (!dashboardId && previousDefault && d.id === previousDefault) {
+        return { ...d, isDefault: false }
+      }
+      if (dashboardId && previousDefault && d.id === previousDefault) {
+        return { ...d, isDefault: false }
+      }
+      return { ...d, isDefault: false }
+    })
+
+    try {
+      set({ defaultDashboardId: dashboardId, dashboards: updatedDashboards })
+
+      if (dashboardId) {
+        await savedApi.setDefaultDashboard(dashboardId)
+        await get().loadPanels(dashboardId)
+      } else if (previousDefault) {
+        await savedApi.updateDashboard(previousDefault, { isDefault: false })
+      }
+
+      await get().loadDashboards()
+    } catch (e: any) {
+      const revertedDashboards = dashboardsState.map((d) => {
+        if (previousDefault && d.id === previousDefault) {
+          return { ...d, isDefault: true }
+        }
+        if (dashboardId && d.id === dashboardId) {
+          return { ...d, isDefault: false }
+        }
+        return d
+      })
+
+      set({ error: String(e?.message || e), defaultDashboardId: previousDefault ?? null, dashboards: revertedDashboards })
+      throw e
     }
   },
 }))

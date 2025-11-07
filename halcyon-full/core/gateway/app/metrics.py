@@ -162,3 +162,34 @@ ml_suggestion_calibration = Histogram(
     "ML suggestion calibration: score vs accepted (0=rejected, 1=accepted)",
     buckets=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
 )
+
+# Phase 7B: Playbook auto-binding metrics
+playbook_binding_decisions_total = Counter(
+    "playbook_binding_decisions_total",
+    "Decisions taken for playbook bindings",
+    ["mode", "decision"],
+)
+
+playbook_binding_runs_total = Counter(
+    "playbook_binding_runs_total",
+    "Playbook binding runs (dry runs and auto runs)",
+    ["mode", "success"],
+)
+
+playbook_binding_inflight = Gauge(
+    "playbook_binding_inflight",
+    "Number of in-flight executions per playbook binding",
+    ["binding_id"],
+)
+
+playbook_binding_quota_remaining = Gauge(
+    "playbook_binding_quota_remaining",
+    "Remaining daily quota per playbook binding",
+    ["binding_id"],
+)
+
+playbook_binding_evaluate_latency_seconds = Histogram(
+    "playbook_binding_evaluate_latency_seconds",
+    "Latency for evaluating playbook bindings",
+    ["mode"],
+)

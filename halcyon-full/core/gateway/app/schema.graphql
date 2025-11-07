@@ -1,3 +1,5 @@
+scalar DateTime
+
 type Query {
   health: String!
   entities(type: String): [Entity!]!
@@ -15,6 +17,8 @@ type Query {
   feedbackByCase(caseId: ID!): [FeedbackEvent!]!
   alertActions(alertId: ID!): [ActionAttempt!]!
   alertRoutePreview(alertId: ID!): [RouteDecision!]!
+  playbookBindings(ruleId: Int, enabled: Boolean, mode: PlaybookMode): [PlaybookBinding!]!
+  playbookRunAudit(alertId: Int!): [PlaybookRunAudit!]!
 }
 
 type Mutation {
@@ -43,6 +47,11 @@ type Mutation {
   provideFeedback(input: ProvideFeedbackInput!): FeedbackEvent!
   alertRetry(alertId: ID!, dest: String!): ActionAttempt!
   alertRetryAllFailed(alertId: ID!): [ActionAttempt!]!
+  createPlaybookBinding(input: PlaybookBindingInput!): PlaybookBinding!
+  updatePlaybookBinding(id: ID!, input: PlaybookBindingInput!): PlaybookBinding!
+  deletePlaybookBinding(id: ID!): Boolean!
+  evaluateBindings(alertId: Int!): [PlaybookRunAudit!]!
+  runBinding(alertId: Int!, bindingId: Int!): PlaybookRunAudit!
 }
 
 type Entity {
@@ -279,4 +288,55 @@ input ProvideFeedbackInput {
   finalValue: String
   action: FeedbackAction!
   score: Float
+}
+
+enum PlaybookMode {
+  suggest
+  dry_run
+  auto_run
+}
+
+type PlaybookBinding {
+  id: ID!
+  ruleId: Int
+  playbookId: String!
+  mode: PlaybookMode!
+  matchTypes: [String!]
+  matchSeverities: [String!]
+  matchTags: [String!]
+  maxPerMinute: Int!
+  maxConcurrent: Int!
+  dailyQuota: Int!
+  enabled: Boolean!
+  createdBy: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type PlaybookRunAudit {
+  id: ID!
+  alertId: Int!
+  bindingId: Int
+  playbookId: Int!
+  mode: PlaybookMode!
+  decision: String!
+  reason: String
+  requestedBy: String
+  startedAt: DateTime!
+  finishedAt: DateTime
+  success: Boolean
+  outputRef: String
+}
+
+input PlaybookBindingInput {
+  ruleId: Int
+  playbookId: String!
+  mode: PlaybookMode!
+  matchTypes: [String!]
+  matchSeverities: [String!]
+  matchTags: [String!]
+  maxPerMinute: Int
+  maxConcurrent: Int
+  dailyQuota: Int
+  enabled: Boolean
 }
