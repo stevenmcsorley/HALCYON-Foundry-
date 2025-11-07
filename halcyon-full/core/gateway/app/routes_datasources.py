@@ -85,6 +85,12 @@ class RollbackRequest(BaseModel):
     comment: Optional[str] = None
 
 
+class DatasourceTestRequest(BaseModel):
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    version: Optional[int] = None
+    configOverride: Optional[Dict[str, Any]] = None
+
+
 def _to_api(datasource: Dict[str, Any]) -> Dict[str, Any]:
     if not datasource:
         return datasource
@@ -267,12 +273,58 @@ async def list_events_endpoint(
     return events
 
 
+async def _call_registry(method: str, path: str, payload: Optional[Dict[str, Any]] = None) -> Any:
+    import httpx
+
+    async with httpx.AsyncClient(base_url=settings.registry_base_url, timeout=20) as client:
+        response = await client.request(method, path, json=payload)
+
+    if response.status_code >= 400:
+        try:
+            detail = response.json().get("detail")
+        except ValueError:
+            detail = response.text
+        raise HTTPException(status_code=response.status_code, detail=detail or "Registry error")
+
+    if not response.content:
+        return {"ok": True}
+    try:
+        return response.json()
+    except ValueError:
+        return {"ok": True}
+
+
 @router.post("/{datasource_id}/test", response_model=Dict[str, Any])
 async def test_datasource_endpoint(
     datasource_id: UUID,
+    payload: DatasourceTestRequest,
     user=Depends(require_roles(["admin", "analyst"])),
 ):
-    raise HTTPException(status_code=501, detail="Datasource test harness not yet implemented")
+    return await _call_registry(
+        "POST",
+        f"/internal/datasources/{datasource_id}/test",
+        {
+            "payload": payload.payload,
+            "version": payload.version,
+            "configOverride": payload.configOverride,
+        },
+    )
+
+
+@router.post("/{datasource_id}/start", response_model=Dict[str, Any])
+async def start_datasource_endpoint(
+    datasource_id: UUID,
+    user=Depends(require_roles(["admin", "analyst"])),
+):
+    return await _call_registry("POST", f"/internal/datasources/{datasource_id}/start")
+
+
+@router.post("/{datasource_id}/stop", response_model=Dict[str, Any])
+async def stop_datasource_endpoint(
+    datasource_id: UUID,
+    user=Depends(require_roles(["admin", "analyst"])),
+):
+    return await _call_registry("POST", f"/internal/datasources/{datasource_id}/stop")
 
 
 @router.post("/{datasource_id}/restart", response_model=Dict[str, Any])
@@ -280,4 +332,12 @@ async def restart_datasource_endpoint(
     datasource_id: UUID,
     user=Depends(require_roles(["admin", "analyst"])),
 ):
-    raise HTTPException(status_code=501, detail="Datasource lifecycle controls not yet implemented")
+    return await _call_registry("POST", f"/internal/datasources/{datasource_id}/restart")
+
+
+@router.post("/{datasource_id}/backfill", response_model=Dict[str, Any])
+async def backfill_datasource_endpoint(
+    datasource_id: UUID,
+    user=Depends(require_roles(["admin", "analyst"])),
+):
+    return await _call_registry("POST", f"/internal/datasources/{datasource_id}/backfill")

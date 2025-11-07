@@ -14,6 +14,7 @@ type Query {
   datasource(id: ID!): Datasource
   datasourceVersions(id: ID!, limit: Int, offset: Int): [DatasourceVersion!]!
   datasourceEvents(id: ID!, limit: Int, offset: Int, eventType: String): [DatasourceEvent!]!
+  datasourceState(id: ID!): DatasourceRuntimeState!
   alertRules: [AlertRule!]!
   alerts(status: String, severity: String): [Alert!]!
   cases(status: String, owner: String, priority: String, search: String, limit: Int, offset: Int): [Case!]!
@@ -43,6 +44,11 @@ type Mutation {
   createDatasourceVersion(id: ID!, input: DatasourceVersionInput!): DatasourceVersion!
   publishDatasourceVersion(id: ID!, version: Int!, comment: String): DatasourceVersion!
   rollbackDatasource(id: ID!, targetVersion: Int!, comment: String): DatasourceVersion!
+  startDatasource(id: ID!): DatasourceRuntimeState!
+  stopDatasource(id: ID!): DatasourceRuntimeState!
+  restartDatasource(id: ID!): DatasourceRuntimeState!
+  testDatasource(id: ID!, payload: JSON!, version: Int, configOverride: JSON): DatasourceTestResult!
+  backfillDatasource(id: ID!): Boolean!
   createAlertRule(input: AlertRuleInput!): AlertRule!
   updateAlertRule(id: ID!, input: AlertRuleInput!): AlertRule!
   deleteAlertRule(id: ID!): Boolean!
@@ -160,6 +166,11 @@ type DatasourceState {
   updatedAt: DateTime
 }
 
+type DatasourceRuntimeState {
+  datasource: Datasource
+  running: Boolean!
+}
+
 type DatasourceVersion {
   version: Int!
   state: String!
@@ -178,6 +189,13 @@ type DatasourceEvent {
   actor: String
   payload: JSON
   createdAt: DateTime!
+}
+
+type DatasourceTestResult {
+  success: Boolean!
+  output: JSON
+  warnings: [String!]
+  logs: [String!]
 }
 
 input DatasourceInput {

@@ -13,8 +13,9 @@ from .tracing import setup_tracing
 from .sdk.http_poller import HttpPollerConnector
 from .sdk.webhook import WebhookConnector
 from .sdk.kafka_consumer import KafkaConsumerConnector
-from .datasource_manager import DatasourceManager
+from .datasource_manager import manager as datasource_manager
 from .db import close_pool
+from .routes_datasources import router as internal_datasource_router
 
 setup_logging()
 
@@ -37,7 +38,6 @@ setup_tracing(app)
 # Store connector instances
 connectors: Dict[str, Any] = {}
 webhook_router = APIRouter(prefix="/webhooks")
-datasource_manager = DatasourceManager()
 
 
 async def periodic_datasource_sync(interval_seconds: int = 60):
@@ -247,5 +247,6 @@ async def list_sources():
 
 
 app.include_router(health_router)
+app.include_router(internal_datasource_router)
 app.include_router(webhook_router)
 app.include_router(sources_router)

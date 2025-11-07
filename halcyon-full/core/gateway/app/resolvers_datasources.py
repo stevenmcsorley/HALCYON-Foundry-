@@ -5,6 +5,7 @@ from uuid import UUID
 
 from ariadne import QueryType, MutationType
 from graphql import GraphQLError
+import httpx
 
 from .config import settings
 from .repo_datasources import (
@@ -106,6 +107,23 @@ def _to_graphql_event(event: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+async def _registry_request(method: str, path: str, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async with httpx.AsyncClient(base_url=settings.registry_base_url, timeout=20) as client:
+        response = await client.request(method, path, json=payload)
+    if response.status_code >= 400:
+        try:
+            detail = response.json().get("detail")
+        except ValueError:
+            detail = response.text
+        raise GraphQLError(detail or "Registry error")
+    if not response.content:
+        return {}
+    try:
+        return response.json()
+    except ValueError:
+        return {}
+
+
 @datasource_query.field("datasources")
 async def resolve_datasources(
     _,
@@ -173,6 +191,17 @@ async def resolve_datasource_events(
     return [_to_graphql_event(e) for e in events]
 
 
+@datasource_query.field("datasourceState")
+async def resolve_datasource_state(_, info, id: str):
+    _require_roles(info, ["viewer", "analyst", "admin"])
+    state = await _registry_request("GET", f"/internal/datasources/{id}/state")
+    datasource = await get_datasource(UUID(id))
+    return {
+        "datasource": _to_graphql_datasource(datasource) if datasource else None,
+        "running": bool(state.get("running")),
+    }
+
+
 @datasource_mutation.field("createDatasource")
 async def resolve_create_datasource(_, info, input):
     user = _require_roles(info, ["admin", "analyst"])
@@ -189,6 +218,15 @@ async def resolve_create_datasource(_, info, input):
     }
     datasource = await create_datasource(payload)
     await record_event(datasource["id"], "create", user.get("sub"), payload={"status": datasource.get("status")})
+
+    # Auto-start if immediately active with published config
+    if datasource.get("status") == "active" and datasource.get("current_version"):
+        try:
+            await _registry_request("POST", f"/internal/datasources/{datasource['id']}/start")
+        except GraphQLError:
+            # ignore start failure here; surfaced via state later
+            pass
+
     return _to_graphql_datasource(datasource)
 
 
@@ -216,6 +254,17 @@ async def resolve_update_datasource(_, info, id: str, input):
     if not updated:
         raise GraphQLError("Datasource not found")
     await record_event(UUID(id), "update", user.get("sub"), payload=input)
+
+    if "status" in input:
+        desired = input["status"]
+        try:
+            if desired == "active":
+                await _registry_request("POST", f"/internal/datasources/{id}/start")
+            elif desired in {"disabled", "draft"}:
+                await _registry_request("POST", f"/internal/datasources/{id}/stop")
+        except GraphQLError:
+            pass
+
     return _to_graphql_datasource(updated)
 
 
@@ -226,6 +275,10 @@ async def resolve_archive_datasource(_, info, id: str):
     if not success:
         raise GraphQLError("Datasource not found or already archived")
     await record_event(UUID(id), "archive", user.get("sub"), payload={"status": "disabled"})
+    try:
+        await _registry_request("POST", f"/internal/datasources/{id}/stop")
+    except GraphQLError:
+        pass
     return True
 
 
@@ -245,6 +298,10 @@ async def resolve_create_datasource_version(_, info, id: str, input):
 async def resolve_publish_datasource_version(_, info, id: str, version: int, comment: Optional[str] = None):
     user = _require_roles(info, ["admin"])
     published = await publish_version(UUID(id), version, user.get("sub"), comment=comment)
+    try:
+        await _registry_request("POST", f"/internal/datasources/{id}/reload")
+    except GraphQLError:
+        pass
     return _to_graphql_version(published)
 
 
@@ -252,5 +309,69 @@ async def resolve_publish_datasource_version(_, info, id: str, version: int, com
 async def resolve_rollback_datasource(_, info, id: str, targetVersion: int, comment: Optional[str] = None):
     user = _require_roles(info, ["admin"])
     rolled = await rollback_version(UUID(id), targetVersion, user.get("sub"), comment=comment)
+    try:
+        await _registry_request("POST", f"/internal/datasources/{id}/reload")
+    except GraphQLError:
+        pass
     return _to_graphql_version(rolled)
+
+
+@datasource_mutation.field("startDatasource")
+async def resolve_start_datasource(_, info, id: str):
+    _require_roles(info, ["admin", "analyst"])
+    state = await _registry_request("POST", f"/internal/datasources/{id}/start")
+    datasource = await get_datasource(UUID(id))
+    return {
+        "datasource": _to_graphql_datasource(datasource) if datasource else None,
+        "running": True,
+    }
+
+
+@datasource_mutation.field("stopDatasource")
+async def resolve_stop_datasource(_, info, id: str):
+    _require_roles(info, ["admin", "analyst"])
+    await _registry_request("POST", f"/internal/datasources/{id}/stop")
+    datasource = await get_datasource(UUID(id))
+    return {
+        "datasource": _to_graphql_datasource(datasource) if datasource else None,
+        "running": False,
+    }
+
+
+@datasource_mutation.field("restartDatasource")
+async def resolve_restart_datasource(_, info, id: str):
+    _require_roles(info, ["admin", "analyst"])
+    await _registry_request("POST", f"/internal/datasources/{id}/restart")
+    datasource = await get_datasource(UUID(id))
+    return {
+        "datasource": _to_graphql_datasource(datasource) if datasource else None,
+        "running": True,
+    }
+
+
+@datasource_mutation.field("testDatasource")
+async def resolve_test_datasource(_, info, id: str, payload: Dict[str, Any], version: Optional[int] = None, configOverride: Optional[Dict[str, Any]] = None):
+    _require_roles(info, ["admin", "analyst"])
+    result = await _registry_request(
+        "POST",
+        f"/internal/datasources/{id}/test",
+        {
+            "payload": payload,
+            "version": version,
+            "configOverride": configOverride,
+        },
+    )
+    return {
+        "success": bool(result.get("success")),
+        "output": result.get("output"),
+        "warnings": result.get("warnings") or [],
+        "logs": result.get("logs") or [],
+    }
+
+
+@datasource_mutation.field("backfillDatasource")
+async def resolve_backfill_datasource(_, info, id: str):
+    _require_roles(info, ["admin", "analyst"])
+    await _registry_request("POST", f"/internal/datasources/{id}/backfill")
+    return True
 
