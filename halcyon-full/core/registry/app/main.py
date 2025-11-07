@@ -13,6 +13,8 @@ from .tracing import setup_tracing
 from .sdk.http_poller import HttpPollerConnector
 from .sdk.webhook import WebhookConnector
 from .sdk.kafka_consumer import KafkaConsumerConnector
+from .datasource_manager import DatasourceManager
+from .db import close_pool
 
 setup_logging()
 
@@ -25,6 +27,7 @@ class Settings(BaseSettings):
     ontology_base_url: str = "http://ontology:8081"
     gateway_base_url: str = "http://gateway:8088"
     kafka_brokers: str = os.getenv("KAFKA_BROKERS", "localhost:9092")
+    pg_dsn: str = os.getenv("PG_DSN", "postgresql://postgres:dev@postgres:5432/halcyon")
 
 settings = Settings()
 app = FastAPI(title="HALCYON Registry", version="0.1.0")
@@ -34,6 +37,16 @@ setup_tracing(app)
 # Store connector instances
 connectors: Dict[str, Any] = {}
 webhook_router = APIRouter(prefix="/webhooks")
+datasource_manager = DatasourceManager()
+
+
+async def periodic_datasource_sync(interval_seconds: int = 60):
+    while True:
+        try:
+            await datasource_manager.sync_from_db()
+        except Exception as exc:  # pragma: no cover - background logging
+            logger.error("Datasource sync failure: %s", exc, exc_info=True)
+        await asyncio.sleep(interval_seconds)
 
 
 async def register_plugin(manifest_path: str):
@@ -180,6 +193,14 @@ async def load_all():
     if connector_instances:
         await asyncio.gather(*[start_connector(c) for c in connector_instances], return_exceptions=True)
 
+    # Sync datasource registry from database (Phase 11A groundwork)
+    try:
+        await datasource_manager.sync_from_db()
+    except Exception as exc:
+        logger.error("Failed to sync datasources from database: %s", exc, exc_info=True)
+
+    asyncio.create_task(periodic_datasource_sync())
+
 
 @app.on_event("shutdown")
 async def shutdown_connectors():
@@ -189,6 +210,8 @@ async def shutdown_connectors():
             await connector.stop()
         except Exception as e:
             logger.error(f"Error stopping connector {connector.connector_id}: {e}")
+
+    await close_pool()
 
 
 # Registry routes for federation

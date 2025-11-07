@@ -10,6 +10,10 @@ type Query {
   savedQuery(id: ID!): SavedQuery
   dashboards: [Dashboard!]!
   dashboard(id: ID!): DashboardWithPanels
+  datasources(status: String, type: String, ownerId: String, orgId: ID, projectId: ID, search: String, limit: Int, offset: Int): [Datasource!]!
+  datasource(id: ID!): Datasource
+  datasourceVersions(id: ID!, limit: Int, offset: Int): [DatasourceVersion!]!
+  datasourceEvents(id: ID!, limit: Int, offset: Int, eventType: String): [DatasourceEvent!]!
   alertRules: [AlertRule!]!
   alerts(status: String, severity: String): [Alert!]!
   cases(status: String, owner: String, priority: String, search: String, limit: Int, offset: Int): [Case!]!
@@ -33,6 +37,12 @@ type Mutation {
   createPanel(dashboardId: ID!, input: PanelInput!): Panel!
   updatePanel(dashboardId: ID!, panelId: ID!, input: PanelUpdateInput!): Panel!
   deletePanel(dashboardId: ID!, panelId: ID!): Boolean!
+  createDatasource(input: DatasourceInput!): Datasource!
+  updateDatasource(id: ID!, input: DatasourceUpdateInput!): Datasource!
+  archiveDatasource(id: ID!): Boolean!
+  createDatasourceVersion(id: ID!, input: DatasourceVersionInput!): DatasourceVersion!
+  publishDatasourceVersion(id: ID!, version: Int!, comment: String): DatasourceVersion!
+  rollbackDatasource(id: ID!, targetVersion: Int!, comment: String): DatasourceVersion!
   createAlertRule(input: AlertRuleInput!): AlertRule!
   updateAlertRule(id: ID!, input: AlertRuleInput!): AlertRule!
   deleteAlertRule(id: ID!): Boolean!
@@ -119,6 +129,81 @@ type DashboardWithPanels {
   createdAt: String!
   updatedAt: String!
   panels: [Panel!]!
+}
+
+type Datasource {
+  id: ID!
+  name: String!
+  description: String
+  type: String!
+  ownerId: String
+  orgId: ID
+  projectId: ID
+  tags: [String!]!
+  status: String!
+  createdAt: DateTime!
+  createdBy: String
+  updatedAt: DateTime!
+  updatedBy: String
+  archivedAt: DateTime
+  currentVersion: Int
+  state: DatasourceState
+}
+
+type DatasourceState {
+  workerStatus: String
+  lastHeartbeatAt: DateTime
+  lastEventAt: DateTime
+  errorCode: String
+  errorMessage: String
+  metrics: JSON
+  updatedAt: DateTime
+}
+
+type DatasourceVersion {
+  version: Int!
+  state: String!
+  config: JSON!
+  summary: String
+  createdAt: DateTime!
+  createdBy: String
+  approvedAt: DateTime
+  approvedBy: String
+}
+
+type DatasourceEvent {
+  id: ID!
+  version: Int
+  eventType: String!
+  actor: String
+  payload: JSON
+  createdAt: DateTime!
+}
+
+input DatasourceInput {
+  name: String!
+  type: String!
+  description: String
+  ownerId: String
+  orgId: ID
+  projectId: ID
+  tags: [String!]
+  status: String
+}
+
+input DatasourceUpdateInput {
+  name: String
+  description: String
+  ownerId: String
+  orgId: ID
+  projectId: ID
+  tags: [String!]
+  status: String
+}
+
+input DatasourceVersionInput {
+  config: JSON!
+  summary: String
 }
 
 input DashboardInput {

@@ -16,6 +16,7 @@ from .resolvers_cases import cases_query, cases_mutation, case_type
 from .resolvers_feedback import feedback_query, feedback_mutation
 from .resolvers_actions import actions_query, actions_mutation
 from .resolvers_bindings import bindings_query, bindings_mutation
+from .resolvers_datasources import datasource_query, datasource_mutation
 from .ws_pubsub import register_ws
 from .health import router as health_router
 from .routes_federation import router as federation_router
@@ -53,8 +54,28 @@ def serialize_datetime(value):
 
 schema = make_executable_schema(
     type_defs,
-    [query, fed_query, saved_query_resolver, alerts_query, cases_query, feedback_query, actions_query, bindings_query, case_type],
-    [mutation, saved_mutation, alerts_mutation, cases_mutation, feedback_mutation, actions_mutation, bindings_mutation],
+    [
+        query,
+        fed_query,
+        saved_query_resolver,
+        alerts_query,
+        cases_query,
+        feedback_query,
+        actions_query,
+        bindings_query,
+        datasource_query,
+        case_type,
+    ],
+    [
+        mutation,
+        saved_mutation,
+        alerts_mutation,
+        cases_mutation,
+        feedback_mutation,
+        actions_mutation,
+        bindings_mutation,
+        datasource_mutation,
+    ],
     datetime_scalar,
 )
 
