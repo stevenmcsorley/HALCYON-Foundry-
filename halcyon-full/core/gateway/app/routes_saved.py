@@ -283,7 +283,16 @@ async def update_dashboard(dashboard_id: UUID, dashboard: DashboardUpdate, reque
             )
             if not row:
                 raise HTTPException(status_code=404, detail="Dashboard not found")
-            return Dashboard(**dict(row))
+            data = dict(row)
+            config_val = data.get("config")
+            if isinstance(config_val, str):
+                try:
+                    data["config"] = json.loads(config_val)
+                except json.JSONDecodeError:
+                    data["config"] = {}
+            elif config_val is None:
+                data["config"] = {}
+            return Dashboard(**data)
 
         # If setting as default, clear other defaults first
         if dashboard.is_default:
@@ -306,7 +315,17 @@ async def update_dashboard(dashboard_id: UUID, dashboard: DashboardUpdate, reque
         )
         if not row:
             raise HTTPException(status_code=404, detail="Dashboard not found")
-        return Dashboard(**dict(row))
+        updated = dict(row)
+        config_val = updated.get("config")
+        if isinstance(config_val, str):
+            try:
+                updated["config"] = json.loads(config_val)
+            except json.JSONDecodeError:
+                updated["config"] = {}
+        elif config_val is None:
+            updated["config"] = {}
+
+        return Dashboard(**updated)
 
 
 @dashboard_router.post("/{dashboard_id}/set-default", status_code=204)

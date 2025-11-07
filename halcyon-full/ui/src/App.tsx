@@ -14,7 +14,6 @@ import { useCasesStore } from './store/casesStore'
 import { useAlertsStore } from './store/alertsStore'
 import { useSavedStore } from './store/savedStore'
 import { ConsoleSummary } from './modules/console/ConsoleSummary'
-import { ConsoleQuickActions } from './modules/console/ConsoleQuickActions'
 import DashboardConsoleView from './modules/dashboards/DashboardConsoleView'
 import * as auth from './services/auth'
 import { Toast, subscribeToToast } from './components/Toast'
@@ -224,9 +223,6 @@ function MainLayout() {
               <div className="h-[calc(100vh-8rem)] flex flex-col overflow-hidden">
                 <div className="p-4 pb-2">
                   <ConsoleSummary cards={summaryCards} />
-                </div>
-                <div className="px-4 pb-2">
-                  <ConsoleQuickActions />
                 </div>
                 <div className="flex-1 min-h-0 overflow-auto px-4 pb-4">
                   <div className="min-h-full">

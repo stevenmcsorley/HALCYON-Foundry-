@@ -52,14 +52,6 @@ export default function DashboardConsoleView(): JSX.Element {
     [queries]
   )
 
-  const dashboardDescription = React.useMemo(() => {
-    if (!dashboard) return null
-    const config = dashboard.config as Record<string, unknown> | undefined
-    if (!config) return null
-    const description = config['description']
-    return typeof description === 'string' ? description : null
-  }, [dashboard])
-
   if (loading && !dashboard) {
     return (
       <div className="flex h-full items-center justify-center text-white/70">
@@ -104,26 +96,6 @@ export default function DashboardConsoleView(): JSX.Element {
 
   return (
     <div className="flex h-full flex-col gap-4">
-      <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h3 className="text-base font-semibold text-white">{dashboard.name}</h3>
-            <span className="rounded-full border border-teal-400/40 bg-teal-500/10 px-2 py-[2px] text-[10px] uppercase tracking-wide text-teal-200">
-              Console default
-            </span>
-          </div>
-          {dashboardDescription && (
-            <p className="text-sm text-white/60 max-w-3xl">{dashboardDescription}</p>
-          )}
-        </div>
-        <button
-          onClick={() => navigate('/dashboards')}
-          className="self-start rounded bg-white/10 px-3 py-2 text-sm text-white transition hover:bg-white/20"
-        >
-          Edit in Dashboard Studio
-        </button>
-      </div>
-
       <div className="flex-1 min-h-0 overflow-auto">
         <div className="grid h-full min-h-0 gap-4 md:grid-cols-2 auto-rows-[minmax(280px,1fr)]">
           {panelList.map((panel) => {

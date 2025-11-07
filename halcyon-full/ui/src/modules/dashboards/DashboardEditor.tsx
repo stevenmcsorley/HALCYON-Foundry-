@@ -476,6 +476,7 @@ export default function DashboardEditor() {
             <>
               <Card
                 title="Dashboard overview"
+                fill={false}
                 header={
                   <div className="flex flex-wrap items-center gap-2">
                     {isDefaultDashboard ? (
