@@ -1,18 +1,25 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import json
+import logging
+import time
 from dataclasses import dataclass
-from typing import Dict, Any, Optional
-from uuid import UUID
 from datetime import datetime, timezone
+from typing import Any, Dict, Optional
+from uuid import UUID
 
 from .db import get_pool
+from .metrics import (
+    datasource_last_sync_timestamp,
+    datasource_lifecycle_events_total,
+    datasource_test_runs_total,
+    datasource_workers_running,
+)
 from .sdk.base import BaseConnector
-from .sdk.webhook import WebhookConnector
 from .sdk.http_poller import HttpPollerConnector
 from .sdk.kafka_consumer import KafkaConsumerConnector
+from .sdk.webhook import WebhookConnector
 
 
 logger = logging.getLogger("registry.datasources")
@@ -112,6 +119,9 @@ class DatasourceManager:
             if removed:
                 logger.info("%d datasources removed or archived: %s", len(removed), [str(ds) for ds in removed])
 
+            self._record_worker_metrics()
+            datasource_last_sync_timestamp.set(time.time())
+
     async def start_datasource(self, datasource_id: UUID) -> Dict[str, Any]:
         async with self._lock:
             info = await self._ensure_datasource_cached(datasource_id)
@@ -172,6 +182,7 @@ class DatasourceManager:
 
         try:
             output = connector.map(payload)
+            datasource_test_runs_total.labels(result="success").inc()
             return {
                 "success": True,
                 "output": output,
@@ -180,6 +191,7 @@ class DatasourceManager:
             }
         except Exception as exc:  # pragma: no cover - mapping errors
             logger.error("Test run failed for %s: %s", datasource_id, exc, exc_info=True)
+            datasource_test_runs_total.labels(result="failure").inc()
             return {
                 "success": False,
                 "output": None,
@@ -255,6 +267,8 @@ class DatasourceManager:
                 last_heartbeat_at=datetime.now(timezone.utc),
             )
             await self._record_event(datasource_id, "start", payload={"version": info.get("published_version")})
+        datasource_lifecycle_events_total.labels(event="start").inc()
+        self._record_worker_metrics()
         except Exception as exc:
             logger.error("Failed to start datasource %s: %s", datasource_id, exc, exc_info=True)
             await self._update_state(
@@ -264,6 +278,7 @@ class DatasourceManager:
                 error_code=type(exc).__name__,
                 error_message=str(exc),
             )
+        datasource_lifecycle_events_total.labels(event="start_error").inc()
             raise
 
     async def _stop_worker(self, datasource_id: UUID) -> bool:
@@ -281,11 +296,14 @@ class DatasourceManager:
         self._workers.pop(datasource_id, None)
         await self._update_state(datasource_id, worker_status="stopped")
         await self._record_event(datasource_id, "stop", payload={})
+        datasource_lifecycle_events_total.labels(event="stop").inc()
+        self._record_worker_metrics()
         return True
 
     async def _restart_worker(self, datasource_id: UUID, info: Dict[str, Any]) -> None:
         await self._stop_worker(datasource_id)
         await self._start_worker(datasource_id, info)
+        datasource_lifecycle_events_total.labels(event="restart").inc()
 
     def _build_connector(self, datasource_id: UUID, config: Dict[str, Any]) -> Optional[BaseConnector]:
         connector_cfg = config.get("connector", {})
@@ -386,6 +404,14 @@ class DatasourceManager:
                 actor,
                 json.dumps(payload) if payload is not None else None,
             )
+
+    def _record_worker_metrics(self) -> None:
+        running = sum(
+            1
+            for managed in self._workers.values()
+            if managed.connector and managed.connector.is_running
+        )
+        datasource_workers_running.set(running)
 
 
 manager = DatasourceManager()
