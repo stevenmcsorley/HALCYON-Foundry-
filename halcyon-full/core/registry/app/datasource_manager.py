@@ -16,6 +16,7 @@ from .metrics import (
     datasource_test_runs_total,
     datasource_workers_running,
 )
+from .secret_store import secret_store
 from .sdk.base import BaseConnector
 from .sdk.http_poller import HttpPollerConnector
 from .sdk.kafka_consumer import KafkaConsumerConnector
@@ -170,19 +171,19 @@ class DatasourceManager:
         version: Optional[int] = None,
         config_override: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        config = config_override
-        if config is None:
-            config = await self._fetch_version_config(datasource_id, version)
+        config = config_override or await self._fetch_version_config(datasource_id, version)
         if not config:
             raise ValueError("No configuration available for datasource")
 
-        connector = self._build_connector(datasource_id, config)
+        runtime_config = await self._prepare_runtime_config(datasource_id, config, allow_missing=True)
+        connector = self._build_connector(datasource_id, runtime_config)
         if connector is None:
             raise ValueError("Unsupported connector type")
 
         try:
             output = connector.map(payload)
             datasource_test_runs_total.labels(result="success").inc()
+            await self._record_event(datasource_id, "test_run", actor=None, payload={"success": True})
             return {
                 "success": True,
                 "output": output,
@@ -192,6 +193,7 @@ class DatasourceManager:
         except Exception as exc:  # pragma: no cover - mapping errors
             logger.error("Test run failed for %s: %s", datasource_id, exc, exc_info=True)
             datasource_test_runs_total.labels(result="failure").inc()
+            await self._record_event(datasource_id, "test_run", actor=None, payload={"success": False, "error": str(exc)})
             return {
                 "success": False,
                 "output": None,
@@ -248,7 +250,8 @@ class DatasourceManager:
         if existing and existing.connector and existing.connector.is_running:
             return
 
-        connector = self._build_connector(datasource_id, info.get("config") or {})
+        runtime_config = await self._prepare_runtime_config(datasource_id, info.get("config") or {})
+        connector = self._build_connector(datasource_id, runtime_config)
         if connector is None:
             logger.warning("Datasource %s has unsupported connector config", datasource_id)
             await self._update_state(datasource_id, worker_status="error", error_message="Unsupported connector type")
@@ -256,7 +259,9 @@ class DatasourceManager:
 
         try:
             await connector.start()
-            managed = ManagedDatasource(datasource_id=datasource_id, info=info, connector=connector)
+            managed_info = dict(info)
+            managed_info["resolved_config"] = runtime_config
+            managed = ManagedDatasource(datasource_id=datasource_id, info=managed_info, connector=connector)
             self._workers[datasource_id] = managed
             await self._update_state(
                 datasource_id,
@@ -267,8 +272,8 @@ class DatasourceManager:
                 last_heartbeat_at=datetime.now(timezone.utc),
             )
             await self._record_event(datasource_id, "start", payload={"version": info.get("published_version")})
-        datasource_lifecycle_events_total.labels(event="start").inc()
-        self._record_worker_metrics()
+            datasource_lifecycle_events_total.labels(event="start").inc()
+            self._record_worker_metrics()
         except Exception as exc:
             logger.error("Failed to start datasource %s: %s", datasource_id, exc, exc_info=True)
             await self._update_state(
@@ -278,7 +283,7 @@ class DatasourceManager:
                 error_code=type(exc).__name__,
                 error_message=str(exc),
             )
-        datasource_lifecycle_events_total.labels(event="start_error").inc()
+            datasource_lifecycle_events_total.labels(event="start_error").inc()
             raise
 
     async def _stop_worker(self, datasource_id: UUID) -> bool:
@@ -304,6 +309,21 @@ class DatasourceManager:
         await self._stop_worker(datasource_id)
         await self._start_worker(datasource_id, info)
         datasource_lifecycle_events_total.labels(event="restart").inc()
+
+    async def _prepare_runtime_config(
+        self,
+        datasource_id: UUID,
+        config: Dict[str, Any],
+        *,
+        allow_missing: bool = False,
+    ) -> Dict[str, Any]:
+        """Return config with secrets resolved; leaves original untouched."""
+        # Deep copy via JSON round-trip to avoid mutating caller
+        serialized = json.dumps(config)
+        materialized = json.loads(serialized)
+        secret_mapping = materialized.pop("secrets", {})
+        secrets = await self._resolve_secrets(datasource_id, secret_mapping, allow_missing=allow_missing)
+        return self._replace_secret_placeholders(materialized, secrets)
 
     def _build_connector(self, datasource_id: UUID, config: Dict[str, Any]) -> Optional[BaseConnector]:
         connector_cfg = config.get("connector", {})
@@ -331,6 +351,69 @@ class DatasourceManager:
             return KafkaConsumerConnector(connector_id, payload)
 
         return None
+
+    async def _resolve_secrets(
+        self,
+        datasource_id: UUID,
+        alias_mapping: Dict[str, Any],
+        *,
+        allow_missing: bool = False,
+    ) -> Dict[str, str]:
+        if not alias_mapping:
+            return {}
+
+        normalized: Dict[str, str] = {}
+        for alias, spec in alias_mapping.items():
+            if isinstance(spec, dict):
+                key = spec.get("key") or spec.get("name")
+            else:
+                key = spec
+            if not key:
+                continue
+            normalized[alias] = key
+
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT key, encrypted_value
+                FROM datasource_secrets
+                WHERE datasource_id = $1 AND key = ANY($2::text[])
+                """,
+                datasource_id,
+                list(normalized.values()),
+            )
+
+        value_by_key = {
+            row["key"]: secret_store.decrypt(bytes(row["encrypted_value"]))
+            for row in rows
+        }
+
+        secrets: Dict[str, str] = {}
+        for alias, key in normalized.items():
+            value = value_by_key.get(key)
+            if value is None:
+                if allow_missing:
+                    continue
+                raise ValueError(f"Missing secret '{key}' for datasource {datasource_id}")
+            secrets[alias] = value
+        return secrets
+
+    def _replace_secret_placeholders(self, data: Any, secrets: Dict[str, str]) -> Any:
+        if isinstance(data, dict):
+            if "$secret" in data and len(data) == 1:
+                alias = data["$secret"]
+                return secrets.get(alias, data)
+            return {k: self._replace_secret_placeholders(v, secrets) for k, v in data.items()}
+        if isinstance(data, list):
+            return [self._replace_secret_placeholders(item, secrets) for item in data]
+        if isinstance(data, str):
+            result = data
+            for alias, value in secrets.items():
+                result = result.replace(f"{{{{secret.{alias}}}}}", value)
+                result = result.replace(f"{{{{ secret.{alias} }}}}", value)
+            return result
+        return data
 
     async def _update_state(
         self,

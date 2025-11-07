@@ -20,7 +20,11 @@ from .repo_datasources import (
     rollback_version,
     list_events,
     record_event,
+    get_secrets,
+    upsert_secret,
+    delete_secret,
 )
+from .secret_store import secret_store
 
 
 router = APIRouter(prefix="/datasources", tags=["datasources"])
@@ -90,6 +94,19 @@ class DatasourceTestRequest(BaseModel):
     version: Optional[int] = None
     configOverride: Optional[Dict[str, Any]] = None
 
+
+class DatasourceSecretRequest(BaseModel):
+    key: str
+    value: str
+
+
+class DatasourceSecretResponse(BaseModel):
+    key: str
+    version: int
+    createdAt: str
+    createdBy: Optional[str] = None
+    rotatedAt: Optional[str] = None
+    rotatedBy: Optional[str] = None
 
 def _to_api(datasource: Dict[str, Any]) -> Dict[str, Any]:
     if not datasource:
@@ -341,3 +358,65 @@ async def backfill_datasource_endpoint(
     user=Depends(require_roles(["admin", "analyst"])),
 ):
     return await _call_registry("POST", f"/internal/datasources/{datasource_id}/backfill")
+
+
+@router.get("/{datasource_id}/secrets", response_model=List[DatasourceSecretResponse])
+async def list_secrets_endpoint(
+    datasource_id: UUID,
+    user=Depends(require_roles(["admin", "analyst"])),
+):
+    secrets = await get_secrets(datasource_id)
+    return [
+        DatasourceSecretResponse(
+            key=row["key"],
+            version=row["version"],
+            createdAt=row["created_at"].isoformat(),
+            createdBy=row.get("created_by"),
+            rotatedAt=row.get("rotated_at").isoformat() if row.get("rotated_at") else None,
+            rotatedBy=row.get("rotated_by"),
+        )
+        for row in secrets
+    ]
+
+
+@router.post("/{datasource_id}/secrets", response_model=DatasourceSecretResponse, status_code=status.HTTP_201_CREATED)
+async def upsert_secret_endpoint(
+    datasource_id: UUID,
+    payload: DatasourceSecretRequest,
+    user=Depends(require_roles(["admin"])),
+):
+    encrypted = secret_store.encrypt(payload.value)
+    record = await upsert_secret(datasource_id, payload.key, encrypted, user.get("sub"))
+    await record_event(
+        datasource_id,
+        "secret_upsert",
+        user.get("sub"),
+        payload={"key": payload.key, "version": record.get("version")},
+    )
+    return DatasourceSecretResponse(
+        key=record["key"],
+        version=record["version"],
+        createdAt=record["created_at"].isoformat(),
+        createdBy=record.get("created_by"),
+        rotatedAt=record.get("rotated_at").isoformat() if record.get("rotated_at") else None,
+        rotatedBy=record.get("rotated_by"),
+    )
+
+
+@router.delete("/{datasource_id}/secrets/{secret_key}", response_model=Dict[str, bool])
+async def delete_secret_endpoint(
+    datasource_id: UUID,
+    secret_key: str,
+    user=Depends(require_roles(["admin"])),
+):
+    existed = await delete_secret(datasource_id, secret_key)
+    if not existed:
+        raise HTTPException(status_code=404, detail="Secret not found")
+    await record_event(
+        datasource_id,
+        "secret_delete",
+        user.get("sub"),
+        payload={"key": secret_key},
+    )
+    return {"ok": True}
+

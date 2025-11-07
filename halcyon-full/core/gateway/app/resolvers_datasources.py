@@ -21,7 +21,11 @@ from .repo_datasources import (
     rollback_version,
     list_events,
     record_event,
+    get_secrets,
+    upsert_secret,
+    delete_secret,
 )
+from .secret_store import secret_store
 
 
 datasource_query = QueryType()
@@ -107,6 +111,17 @@ def _to_graphql_event(event: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _to_graphql_secret(secret: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "key": secret.get("key"),
+        "version": secret.get("version"),
+        "createdAt": _to_iso(secret.get("created_at")),
+        "createdBy": secret.get("created_by"),
+        "rotatedAt": _to_iso(secret.get("rotated_at")),
+        "rotatedBy": secret.get("rotated_by"),
+    }
+
+
 async def _registry_request(method: str, path: str, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     async with httpx.AsyncClient(base_url=settings.registry_base_url, timeout=20) as client:
         response = await client.request(method, path, json=payload)
@@ -189,6 +204,13 @@ async def resolve_datasource_events(
     event_types = [eventType] if eventType else None
     events = await list_events(UUID(id), limit=limit, offset=offset, event_types=event_types)
     return [_to_graphql_event(e) for e in events]
+
+
+@datasource_query.field("datasourceSecrets")
+async def resolve_datasource_secrets(_, info, id: str):
+    _require_roles(info, ["admin", "analyst"])
+    secrets = await get_secrets(UUID(id))
+    return [_to_graphql_secret(s) for s in secrets]
 
 
 @datasource_query.field("datasourceState")
@@ -373,5 +395,24 @@ async def resolve_test_datasource(_, info, id: str, payload: Dict[str, Any], ver
 async def resolve_backfill_datasource(_, info, id: str):
     _require_roles(info, ["admin", "analyst"])
     await _registry_request("POST", f"/internal/datasources/{id}/backfill")
+    return True
+
+
+@datasource_mutation.field("upsertDatasourceSecret")
+async def resolve_upsert_datasource_secret(_, info, id: str, key: str, value: str):
+    user = _require_roles(info, ["admin"])
+    encrypted = secret_store.encrypt(value)
+    record = await upsert_secret(UUID(id), key, encrypted, user.get("sub"))
+    await record_event(UUID(id), "secret_upsert", user.get("sub"), payload={"key": key, "version": record.get("version")})
+    return _to_graphql_secret(record)
+
+
+@datasource_mutation.field("deleteDatasourceSecret")
+async def resolve_delete_datasource_secret(_, info, id: str, key: str):
+    user = _require_roles(info, ["admin"])
+    deleted = await delete_secret(UUID(id), key)
+    if not deleted:
+        raise GraphQLError("Secret not found")
+    await record_event(UUID(id), "secret_delete", user.get("sub"), payload={"key": key})
     return True
 

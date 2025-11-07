@@ -591,6 +591,17 @@ async def get_secret_value(datasource_id: UUID, key: str) -> Optional[bytes]:
         return bytes(row["encrypted_value"])
 
 
+async def delete_secret(datasource_id: UUID, key: str) -> bool:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM datasource_secrets WHERE datasource_id = $1 AND key = $2",
+            datasource_id,
+            key,
+        )
+        return result.endswith("1")
+
+
 async def _record_event(
     conn: asyncpg.Connection,
     datasource_id: UUID,
