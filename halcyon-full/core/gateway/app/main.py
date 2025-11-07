@@ -27,6 +27,7 @@ from .routes_cases import router as cases_router
 from .routes_feedback import router as feedback_router
 from .routes_actions import router as actions_router
 from .routes_bindings import router as bindings_router, bindings_alerts_router
+from .routes_datasources import router as datasources_router
 from .retry_worker import start_retry_worker
 from .db import init_db, close_pool
 from .logging import setup_logging
@@ -37,8 +38,6 @@ import asyncio
 setup_logging()
 
 type_defs = load_schema_from_path("app/schema.graphql")
-
-datetime_scalar = ScalarType("DateTime")
 
 
 @datetime_scalar.serializer
@@ -132,6 +131,7 @@ app.include_router(feedback_router)
 app.include_router(actions_router)
 app.include_router(bindings_router)
 app.include_router(bindings_alerts_router)
+app.include_router(datasources_router)
 
 @app.on_event("startup")
 async def startup():

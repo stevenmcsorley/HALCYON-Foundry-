@@ -85,6 +85,101 @@ class DashboardWithPanels(BaseModel):
     panels: List[DashboardPanel] = Field(default_factory=list)
 
 
+DatasourceStatus = Literal["draft", "active", "disabled", "error"]
+DatasourceVersionState = Literal["draft", "published", "archived"]
+WorkerStatus = Literal["starting", "running", "stopped", "error"]
+
+
+class Datasource(BaseModel):
+    id: UUID
+    name: str
+    description: Optional[str] = None
+    type: str
+    owner_id: Optional[str] = None
+    org_id: Optional[UUID] = None
+    project_id: Optional[UUID] = None
+    tags: List[str] = Field(default_factory=list)
+    status: DatasourceStatus = "draft"
+    created_at: datetime
+    created_by: Optional[str] = None
+    updated_at: datetime
+    updated_by: Optional[str] = None
+    archived_at: Optional[datetime] = None
+    current_version: Optional[int] = None
+
+
+class DatasourceCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    type: str
+    owner_id: Optional[str] = None
+    org_id: Optional[UUID] = None
+    project_id: Optional[UUID] = None
+    tags: List[str] = Field(default_factory=list)
+
+
+class DatasourceUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    owner_id: Optional[str] = None
+    org_id: Optional[UUID] = None
+    project_id: Optional[UUID] = None
+    tags: Optional[List[str]] = None
+    status: Optional[DatasourceStatus] = None
+
+
+class DatasourceVersion(BaseModel):
+    id: UUID
+    datasource_id: UUID
+    version: int
+    state: DatasourceVersionState
+    config_json: Dict[str, Any]
+    summary: Optional[str] = None
+    created_at: datetime
+    created_by: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    approved_by: Optional[str] = None
+
+
+class DatasourceVersionCreate(BaseModel):
+    config_json: Dict[str, Any]
+    summary: Optional[str] = None
+
+
+class DatasourceState(BaseModel):
+    datasource_id: UUID
+    current_version: Optional[int] = None
+    worker_status: WorkerStatus = "stopped"
+    last_heartbeat_at: Optional[datetime] = None
+    last_event_at: Optional[datetime] = None
+    error_code: Optional[str] = None
+    error_message: Optional[str] = None
+    metrics_snapshot: Dict[str, Any] = Field(default_factory=dict)
+    updated_at: datetime
+
+
+class DatasourceSecret(BaseModel):
+    id: UUID
+    datasource_id: UUID
+    key: str
+    encrypted_value: bytes
+    version: int
+    created_at: datetime
+    created_by: Optional[str] = None
+    rotated_at: Optional[datetime] = None
+    rotated_by: Optional[str] = None
+
+
+class DatasourceEvent(BaseModel):
+    id: int
+    datasource_id: UUID
+    version: Optional[int] = None
+    event_type: str
+    actor: Optional[str] = None
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+
 # Alert types and models
 Severity = Literal["low", "medium", "high"]
 Status = Literal["open", "ack", "resolved"]  # Note: using "open" instead of "new" per Phase 6A+

@@ -7,8 +7,8 @@ Establish the backend foundation for Datasource Studio: persistent storage for d
 ## Scope
 
 1. Database schema & migrations for datasource metadata, versioning, and secrets.
-2. Registry service refactor to pull configs from DB, manage connector workers, and expose lifecycle/test hooks.
-3. Gateway/Registry APIs (REST + GraphQL) for datasource CRUD, publish, rollback, test-run, metrics.
+2. GraphQL schema/resolvers for datasources and versions (parity with REST).
+3. Registry service refactor to pull configs from DB, manage connector workers, and expose lifecycle/test hooks.
 4. Secret handling approach (encrypted storage + integration hooks for external vaults).
 5. RBAC/Audit requirements definition and minimal enforcement for Phase 11A (full UI in later sub-phases).
 
@@ -35,8 +35,8 @@ Establish the backend foundation for Datasource Studio: persistent storage for d
 - Provide test-run executor (single-shot transform + validation).
 - Emit health/metrics per datasource.
 
-### M3 — Gateway & Registry API Layer
-- REST endpoints (`/datasources`, `/datasources/{id}`, `/datasources/{id}/test`, etc.).
+### M3 — Gateway API Layer
+- REST endpoints (`/datasources`, `/datasources/{id}`, versions, events, lifecycle stubs).
 - GraphQL schema additions (types, queries, mutations for datasource & versions).
 - Authentication & authorization checks (basic role enforcement).
 
