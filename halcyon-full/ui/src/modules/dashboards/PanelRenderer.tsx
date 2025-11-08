@@ -2,7 +2,6 @@ import React from 'react'
 import type { PanelType, SavedQuery } from '@/store/savedStore'
 import { MapPanel } from '@/modules/map'
 import GraphCanvas from '@/modules/graph/GraphCanvas'
-import { ListPanel } from '@/modules/list'
 import { TimelinePanel } from '@/modules/timeline'
 import { TablePanel } from './panels/TablePanel'
 import { TopBarPanel } from './panels/TopBarPanel'
@@ -10,32 +9,84 @@ import { GeoHeatPanel } from './panels/GeoHeatPanel'
 import { gql } from '@/services/api'
 import { Card } from '@/components/Card'
 import { EmptyState } from '@/components/EmptyState'
-import { inferShape, isShapeCompatible, getExpectedShape, getPanelHint, getShapeLabel, type QueryShape } from '@/lib/queryShapes'
+import {
+  inferShape,
+  isShapeCompatible,
+  getExpectedShape,
+  getPanelHint,
+  getShapeLabel,
+  type QueryShape,
+} from '@/lib/queryShapes'
 import { savedApi } from '@/store/savedStore'
 import { AlertDialog } from '@/components/AlertDialog'
+import { dashboardStream } from '@/services/dashboardStream'
 
-export default function PanelRenderer({ 
-  type, 
-  query, 
-  refreshSec = 30, 
-  config,
-  onQueryChange
-}: { 
+type PanelRendererProps = {
   type: PanelType
   query?: SavedQuery | null
   refreshSec?: number
   config?: Record<string, unknown>
   onQueryChange?: () => void
-}) {
+}
+
+export default function PanelRenderer({
+  type,
+  query,
+  refreshSec = 30,
+  config,
+  onQueryChange,
+}: PanelRendererProps) {
   const [data, setData] = React.useState<any>(null)
   const [error, setError] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(false)
-  const [shapeMismatch, setShapeMismatch] = React.useState<{ detected: QueryShape; expected: QueryShape | QueryShape[] } | null>(null)
+  const [shapeMismatch, setShapeMismatch] = React.useState<{
+    detected: QueryShape
+    expected: QueryShape | QueryShape[]
+  } | null>(null)
   const [alertDialog, setAlertDialog] = React.useState<{ isOpen: boolean; title: string; message: string }>({
     isOpen: false,
     title: '',
-    message: ''
+    message: '',
   })
+  const [liveRows, setLiveRows] = React.useState<any[]>([])
+
+  const liveTopic = React.useMemo(() => {
+    const configuredTopic = typeof config?.liveTopic === 'string' ? config.liveTopic : undefined
+    if (configuredTopic) return configuredTopic
+    const sourceId = typeof config?.liveSourceId === 'string' ? config.liveSourceId : undefined
+    return sourceId ? `datasource.${sourceId}` : undefined
+  }, [config])
+
+  const liveLimit = React.useMemo(() => {
+    const raw = (config?.liveLimit ?? config?.live_limit) as number | string | undefined
+    const parsed = typeof raw === 'number' ? raw : raw ? parseInt(String(raw), 10) : NaN
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 200
+  }, [config])
+
+  React.useEffect(() => {
+    if (!liveTopic) {
+      setLiveRows([])
+      return
+    }
+    const unsubscribe = dashboardStream.subscribe(liveTopic, (payload: any) => {
+      const entity = payload?.data ?? payload
+      if (!entity) return
+      const entityId = entity.id ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`
+      setLiveRows((prev) => {
+        const deduped = prev.filter((item) => item.id !== entityId)
+        return [{ ...entity, id: entityId }, ...deduped].slice(0, liveLimit)
+      })
+    })
+    return () => unsubscribe()
+  }, [liveTopic, liveLimit])
+
+  React.useEffect(() => {
+    if (liveTopic && liveRows.length > 0) {
+      setShapeMismatch(null)
+      setError(null)
+      setLoading(false)
+    }
+  }, [liveTopic, liveRows.length])
 
   React.useEffect(() => {
     if (!query) {
@@ -56,50 +107,46 @@ export default function PanelRenderer({
         const result = await gql<any>(query.gql, {})
         if (!cancelled) {
           setData(result)
-          
-          // Infer and validate shape
+
           const shapeInfo = inferShape(result)
           const expected = getExpectedShape(type)
           const compatible = isShapeCompatible(shapeInfo.shape, type)
-          
+
           if (!compatible && shapeInfo.confidence === 'high') {
             setShapeMismatch({
               detected: shapeInfo.shape,
-              expected: expected
+              expected,
             })
-            
-            // Non-blocking alert
-            const expectedLabels = Array.isArray(expected) 
-              ? expected.map(s => getShapeLabel(s)).join(' or ')
+
+            const expectedLabels = Array.isArray(expected)
+              ? expected.map((s) => getShapeLabel(s)).join(' or ')
               : getShapeLabel(expected)
-            
+
             setAlertDialog({
               isOpen: true,
               title: 'Query Shape Mismatch',
-              message: `This query returns ${getShapeLabel(shapeInfo.shape)}; this panel expects ${expectedLabels}. The panel will show an empty state until you change the query.`
+              message: `This query returns ${getShapeLabel(shapeInfo.shape)}; this panel expects ${expectedLabels}. The panel will show an empty state until you change the query.`,
             })
-            
-            // Cache shapeHint if not set
+
             if (!query.shapeHint && query.id) {
               try {
                 await savedApi.updateQuery(query.id, { shapeHint: shapeInfo.shape })
               } catch {
-                // Silent fail - shapeHint update is optional
+                /* ignore */
               }
             }
           } else {
             setShapeMismatch(null)
-            
-            // Cache shapeHint if not set
+
             if (!query.shapeHint && query.id && shapeInfo.confidence === 'high') {
               try {
                 await savedApi.updateQuery(query.id, { shapeHint: shapeInfo.shape })
               } catch {
-                // Silent fail
+                /* ignore */
               }
             }
           }
-          
+
           setLoading(false)
         }
       } catch (e: any) {
@@ -114,8 +161,7 @@ export default function PanelRenderer({
 
     fetchData()
 
-    // Set up refresh interval
-    if (refreshSec && refreshSec >= 5) {
+    if (!liveTopic && refreshSec && refreshSec >= 5) {
       intervalId = window.setInterval(fetchData, refreshSec * 1000)
     }
 
@@ -123,33 +169,46 @@ export default function PanelRenderer({
       cancelled = true
       if (intervalId) clearInterval(intervalId)
     }
-  }, [query?.gql, query?.id, refreshSec, type])
+  }, [query?.gql, query?.id, refreshSec, type, liveTopic])
 
-  // No query assigned
+  const liveData = React.useMemo(() => {
+    if (!liveTopic || liveRows.length === 0) return null
+    if (type === 'metric') {
+      return {
+        value: liveRows.length,
+        entities: liveRows,
+      }
+    }
+    if (type === 'timeline') {
+      return null
+    }
+    return { entities: liveRows }
+  }, [liveRows, liveTopic, type])
+
+  const renderData = liveData ?? data
+  const hasLiveData = Boolean(liveData)
+
   if (!query) {
     return (
       <EmptyState
         title="No Query Selected"
         message={getPanelHint(type)}
-        actionLabel={onQueryChange ? "Select Query" : undefined}
+        actionLabel={onQueryChange ? 'Select Query' : undefined}
         onAction={onQueryChange}
       />
     )
   }
 
-  if (loading) {
+  if (loading && !hasLiveData) {
     return <div className="text-sm text-muted p-4">Loading...</div>
   }
 
-  if (error) {
+  if (error && !hasLiveData) {
     return (
       <div className="p-4">
         <div className="text-red-400 text-sm mb-2">Error: {error}</div>
         {onQueryChange && (
-          <button
-            onClick={onQueryChange}
-            className="text-xs text-teal-400 hover:text-teal-300 underline"
-          >
+          <button onClick={onQueryChange} className="text-xs text-teal-400 hover:text-teal-300 underline">
             Change query
           </button>
         )}
@@ -157,18 +216,17 @@ export default function PanelRenderer({
     )
   }
 
-  // Shape mismatch - show EmptyState
-  if (shapeMismatch) {
+  if (shapeMismatch && !hasLiveData) {
     const expectedLabels = Array.isArray(shapeMismatch.expected)
-      ? shapeMismatch.expected.map(s => getShapeLabel(s)).join(' or ')
+      ? shapeMismatch.expected.map((s) => getShapeLabel(s)).join(' or ')
       : getShapeLabel(shapeMismatch.expected)
-    
+
     return (
       <>
         <EmptyState
           title="Query Shape Mismatch"
           message={`This query returns ${getShapeLabel(shapeMismatch.detected)}, but this panel expects ${expectedLabels}. Please select a compatible query.`}
-          actionLabel={onQueryChange ? "Change Query" : undefined}
+          actionLabel={onQueryChange ? 'Change Query' : undefined}
           onAction={onQueryChange}
         />
         <AlertDialog
@@ -183,33 +241,22 @@ export default function PanelRenderer({
   }
 
   if (type === 'metric') {
-    // Try various ways to extract a numeric value
     let val: number | string = '—'
-    if (data) {
-      // Direct value
-      if (typeof data.value === 'number') {
-        val = data.value
-      }
-      // Nested result.value
-      else if (data.result?.value && typeof data.result.value === 'number') {
-        val = data.result.value
-      }
-      // Count of array results
-      else if (Array.isArray(data.entities)) {
-        val = data.entities.length
-      }
-      else if (Array.isArray(data.relationships)) {
-        val = data.relationships.length
-      }
-      // Count first array value in data
-      else {
-        const firstArray = Object.values(data).find(v => Array.isArray(v)) as any[]
+    if (renderData) {
+      if (typeof renderData.value === 'number') {
+        val = renderData.value
+      } else if (renderData.result?.value && typeof renderData.result.value === 'number') {
+        val = renderData.result.value
+      } else if (Array.isArray(renderData.entities)) {
+        val = renderData.entities.length
+      } else if (Array.isArray(renderData.relationships)) {
+        val = renderData.relationships.length
+      } else {
+        const firstArray = Object.values(renderData).find((v) => Array.isArray(v)) as any[]
         if (firstArray) {
           val = firstArray.length
-        }
-        // Fallback to first value
-        else {
-          const firstVal = Object.values(data)[0]
+        } else {
+          const firstVal = Object.values(renderData)[0]
           if (firstVal !== undefined && firstVal !== null) {
             val = String(firstVal)
           }
@@ -218,38 +265,36 @@ export default function PanelRenderer({
     }
     return (
       <div className="text-center p-4">
+        {liveTopic && (
+          <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-wide text-emerald-200 mb-2">
+            <span className="flex h-2 w-2 rounded-full bg-emerald-300 animate-pulse" />
+            Live
+          </div>
+        )}
         <div className="text-3xl font-bold text-white">{String(val)}</div>
       </div>
     )
   }
 
-  if (type === 'list') {
-    return (
-      <pre className="text-xs overflow-auto max-h-64 text-white bg-black/20 p-2 rounded">
-        {JSON.stringify(data, null, 2)}
-      </pre>
-    )
-  }
-
   if (type === 'graph') {
-    // Transform query result to graph format
-    const entities = data?.entities || []
-    const relationships = data?.relationships || []
-    
-    // Extract from nested structure if needed
-    const allEntities = entities.length > 0 ? entities : (data?.data?.entities || Object.values(data || {}).flat().filter((v: any) => v && typeof v === 'object' && v.id && v.type))
-    const allRelationships = relationships.length > 0 ? relationships : (data?.data?.relationships || [])
+    const entities = renderData?.entities || []
+    const relationships = renderData?.relationships || []
+
+    const allEntities =
+      entities.length > 0
+        ? entities
+        : renderData?.data?.entities || Object.values(renderData || {}).flat().filter((v: any) => v && typeof v === 'object' && v.id && v.type)
+    const allRelationships = relationships.length > 0 ? relationships : renderData?.data?.relationships || []
 
     const nodes = allEntities.map((e: any) => ({
       data: {
         id: e.id,
         label: e.type === 'Location' && e.attrs?.name ? e.attrs.name : e.id,
-        type: e.type
-      }
+        type: e.type,
+      },
     }))
 
-    // Only include edges where both source and target nodes exist
-    const nodeIds = new Set(nodes.map(n => n.data.id))
+    const nodeIds = new Set(nodes.map((n) => n.data.id))
     const edges = allRelationships
       .filter((rel: any) => nodeIds.has(rel.fromId) && nodeIds.has(rel.toId))
       .map((rel: any, idx: number) => ({
@@ -257,8 +302,8 @@ export default function PanelRenderer({
           id: `edge-${idx}`,
           source: rel.fromId,
           target: rel.toId,
-          label: rel.type
-        }
+          label: rel.type,
+        },
       }))
 
     return (
@@ -268,20 +313,39 @@ export default function PanelRenderer({
     )
   }
 
-  if (type === 'timeline') return <TimelinePanel />
-  if (type === 'map') return <MapPanel />
+  if (type === 'timeline') {
+    return <TimelinePanel />
+  }
+
+  if (type === 'map') {
+    return <MapPanel />
+  }
 
   if (type === 'table') {
-    return <TablePanel data={data} config={config as any} />
+    return (
+      <div className="flex flex-col h-full">
+        {liveTopic && (
+          <div className="flex items-center gap-2 px-3 py-2 text-xs uppercase tracking-wide text-emerald-200 border-b border-emerald-400/30 bg-emerald-500/10">
+            <span className="flex h-2 w-2 rounded-full bg-emerald-300 animate-pulse" />
+            Live stream
+          </div>
+        )}
+        <TablePanel data={renderData} config={config as any} />
+      </div>
+    )
   }
 
   if (type === 'topbar') {
-    return <TopBarPanel data={data} config={config as any} />
+    return <TopBarPanel data={renderData} config={config as any} />
   }
 
   if (type === 'geoheat') {
-    return <GeoHeatPanel data={data} config={config as any} />
+    return <GeoHeatPanel data={renderData} config={config as any} />
   }
 
-  return <div className="text-white opacity-70">Unknown panel type: {type}</div>
+  return (
+    <pre className="text-xs overflow-auto max-h-64 text-white bg-black/20 p-2 rounded">
+      {JSON.stringify(renderData, null, 2)}
+    </pre>
+  )
 }

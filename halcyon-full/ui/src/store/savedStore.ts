@@ -247,6 +247,17 @@ export const savedApi = {
       method: 'DELETE',
       headers: getAuthHeaders(),
     }).then(() => undefined),
+
+  listDatasources: (): Promise<Array<{ id: string; name: string; status?: string }>> =>
+    fetch(`${API}/datasources`, { headers: getAuthHeaders() })
+      .then(j)
+      .then((rows: any[]) =>
+        rows.map((row) => ({
+          id: row.id,
+          name: row.name,
+          status: row.status,
+        })),
+      ),
 }
 
 type SavedState = {

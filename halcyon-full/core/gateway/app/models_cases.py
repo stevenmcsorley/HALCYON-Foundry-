@@ -57,4 +57,6 @@ class CaseNote(CaseNoteBase):
 
 
 class AssignAlertsRequest(BaseModel):
-    alert_ids: List[int] = Field(..., min_items=1)
+    model_config = ConfigDict(populate_by_name=True)
+
+    alert_ids: List[int] = Field(..., min_items=1, alias="alertIds")

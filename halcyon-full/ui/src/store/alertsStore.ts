@@ -42,6 +42,36 @@ type State = {
   resolve: (id: number) => Promise<void>;
 };
 
+const normalizeAlert = (raw: any): Alert => ({
+  id: raw.id,
+  ruleId: raw.ruleId ?? raw.rule_id,
+  entityId: raw.entityId ?? raw.entity_id ?? undefined,
+  message: raw.message,
+  severity: raw.severity,
+  status: raw.status,
+  createdAt: raw.createdAt ?? raw.created_at ?? "",
+  acknowledgedAt: raw.acknowledgedAt ?? raw.acknowledged_at ?? undefined,
+  resolvedAt: raw.resolvedAt ?? raw.resolved_at ?? undefined,
+  acknowledgedBy: raw.acknowledgedBy ?? raw.acknowledged_by ?? undefined,
+  resolvedBy: raw.resolvedBy ?? raw.resolved_by ?? undefined,
+  count: raw.count ?? undefined,
+  firstSeen: raw.firstSeen ?? raw.first_seen ?? undefined,
+  lastSeen: raw.lastSeen ?? raw.last_seen ?? undefined,
+  fingerprint: raw.fingerprint ?? undefined,
+  groupKey: raw.groupKey ?? raw.group_key ?? undefined,
+  caseId: raw.caseId ?? raw.case_id ?? undefined,
+  suppressedBy: raw.suppressedBy ?? (raw.suppressedByKind
+    ? {
+        kind: raw.suppressedByKind,
+        id: raw.suppressedById || 0,
+        name: raw.suppressedByName || "",
+      }
+    : undefined),
+  suppressedByKind: raw.suppressedByKind ?? undefined,
+  suppressedById: raw.suppressedById ?? undefined,
+  suppressedByName: raw.suppressedByName ?? undefined,
+});
+
 export const useAlertsStore = create<State>((set, get) => ({
   alerts: [],
   unread: 0,
@@ -50,7 +80,7 @@ export const useAlertsStore = create<State>((set, get) => ({
     try {
       const { status, severity } = get().filters;
       const res = await api.get("/alerts", { params: { status, severity } });
-      set({ alerts: res.data });
+      set({ alerts: (res.data || []).map(normalizeAlert) });
     } catch (error: any) {
       // Silently handle expected errors - backend might not be configured or user not authenticated
       const errorMsg = error?.message || '';
@@ -111,22 +141,23 @@ export const useAlertsStore = create<State>((set, get) => ({
 // Wire WebSocket stream
 subscribe((m: any) => {
   if (m?.t === "alert.created") {
-          // Map suppressedBy fields if present
-      const alertData = m.data;
-      if (alertData.suppressedByKind) {
-        alertData.suppressedBy = {
-          kind: alertData.suppressedByKind,
-          id: alertData.suppressedById || 0,
-          name: alertData.suppressedByName || '',
-        };
-      }
+    // Map suppressedBy fields if present
+    const alertData = { ...m.data };
+    if (alertData.suppressedByKind) {
+      alertData.suppressedBy = {
+        kind: alertData.suppressedByKind,
+        id: alertData.suppressedById || 0,
+        name: alertData.suppressedByName || '',
+      };
+    }
+    const normalized = normalizeAlert(alertData);
       useAlertsStore.setState((s) => ({
-        alerts: [alertData, ...s.alerts],
+        alerts: [normalized, ...s.alerts],
         unread: s.unread + (m.data.status === "open" ? 1 : 0),
       }));
     } else if (m?.t === "alert.updated") {
       // Map suppressedBy fields if present
-      const alertData = m.data;
+      const alertData = { ...m.data };
       if (alertData.suppressedByKind) {
         alertData.suppressedBy = {
           kind: alertData.suppressedByKind,
@@ -134,8 +165,9 @@ subscribe((m: any) => {
           name: alertData.suppressedByName || '',
         };
       }
+      const normalized = normalizeAlert(alertData);
       useAlertsStore.setState((s) => ({
-        alerts: s.alerts.map((a) => (a.id === m.data.id ? { ...a, ...alertData } : a)),
+        alerts: s.alerts.map((a) => (a.id === normalized.id ? { ...a, ...normalized } : a)),
         // Don't increment unread on dedupe updates
       }));
   }

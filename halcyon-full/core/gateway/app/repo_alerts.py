@@ -268,8 +268,8 @@ async def log_action(alert_id: int, action_type: str, status: str, response_code
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute(
-            """INSERT INTO alert_actions_log(alert_id, action_type, status, response_code, error, latency_ms)
-               VALUES ($1, $2, $3, $4, $5, $6)""",
+            """INSERT INTO alert_actions_log(alert_id, action_type, dest, status, response_code, error, latency_ms)
+               VALUES ($1, $2, $2, $3, $4, $5, $6)""",
             alert_id, action_type, status, response_code, error, latency_ms
         )
 

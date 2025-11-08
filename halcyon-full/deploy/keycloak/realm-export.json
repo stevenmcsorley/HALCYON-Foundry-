@@ -46,6 +46,14 @@
       "redirectUris": [
         "*"
       ]
+    },
+    {
+      "clientId": "halcyon-registry",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "secret": "halcyon-registry-secret"
     }
   ],
   "users": [

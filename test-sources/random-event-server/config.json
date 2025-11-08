@@ -6,16 +6,32 @@
       "timeout_ms": 5000
     },
     "mapping": {
-      "entity_type": "Endpoint",
-      "id": "$.events[*].eventId",
+      "entity_type": "Event",
+      "id": "$.eventId",
       "attrs": {
-        "hostname": "$.events[*].entity.id",
-        "ip": "$.events[*].entity.ip",
-        "severity": "$.events[*].severity",
-        "source_system": "$.events[*].source.system",
-        "region": "$.events[*].source.region",
-        "score": "$.events[*].score",
-        "tags": "$.events[*].tags"
+        "message": "$.summary",
+        "severity": "$.severity",
+        "source": "$.source.system",
+        "region": "$.source.region",
+        "detector": "$.source.detector",
+        "ingest": "$.source.ingest",
+        "scenario": "$.scenario",
+        "event_type": "$.eventType",
+        "score": "$.score",
+        "hostname": "$.entity.hostname",
+        "ip": "$.entity.ip",
+        "user": "$.entity.username",
+        "department": "$.entity.department",
+        "tags": "$.tags",
+        "recommended_playbook": "$.recommendedPlaybook.name",
+        "recommended_playbook_id": "$.recommendedPlaybook.id",
+        "recommended_actions": "$.recommendedActions",
+        "kill_stage": "$.killChain.stage",
+        "ioc_type": "$.ioc.type",
+        "ioc_indicator": "$.ioc.indicator",
+        "ioc_confidence": "$.ioc.confidence",
+        "case_title": "$.caseTemplate.title",
+        "case_priority": "$.caseTemplate.priority"
       }
     }
   }

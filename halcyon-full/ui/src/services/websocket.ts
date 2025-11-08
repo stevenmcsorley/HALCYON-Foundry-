@@ -1,6 +1,6 @@
 type Msg = { t:'entity.upsert'|'relationship.upsert'|'pong'; data?:any } & Record<string,any>
 
-const WS_URL = import.meta.env.VITE_GATEWAY_WS_URL
+export const WS_URL = import.meta.env.VITE_GATEWAY_WS_URL
   || (import.meta.env.VITE_GATEWAY_URL ?? 'http://localhost:8088/graphql')
        .replace(/^http/,'ws').replace(/\/graphql\/?$/,'') + '/ws'
 

@@ -3,12 +3,15 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Dict, Optional
 from uuid import UUID
+
+import redis.asyncio as redis
 
 from .db import get_pool
 from .metrics import (
@@ -41,6 +44,17 @@ class DatasourceManager:
         self._datasources: Dict[UUID, Dict[str, Any]] = {}
         self._workers: Dict[UUID, ManagedDatasource] = {}
         self._lock = asyncio.Lock()
+        self._redis: redis.Redis | None = None
+
+    async def _get_redis(self) -> redis.Redis | None:
+        if self._redis is None:
+            redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+            try:
+                self._redis = redis.from_url(redis_url, decode_responses=True)
+            except Exception as exc:
+                logger.error("Failed to initialise Redis connection for websocket stream: %s", exc)
+                self._redis = None
+        return self._redis
 
     @property
     def datasources(self) -> Dict[UUID, Dict[str, Any]]:
@@ -378,6 +392,12 @@ class DatasourceManager:
 
         @wraps(original_emit)
         async def emit_with_state(raw: Dict[str, Any], gateway_url: Optional[str] = None) -> None:
+            mapped = None
+            try:
+                mapped = connector.map(raw)
+            except Exception as exc:
+                logger.debug("Failed to map raw payload for datasource %s: %s", datasource_id, exc)
+
             await original_emit(raw, gateway_url=gateway_url)
             now = datetime.now(timezone.utc)
             await self._update_state(
@@ -386,6 +406,8 @@ class DatasourceManager:
                 last_heartbeat_at=now,
                 worker_status="running",
             )
+            if mapped:
+                await self._publish_stream(datasource_id, mapped)
 
         connector.emit = emit_with_state  # type: ignore[assignment]
 
@@ -402,6 +424,26 @@ class DatasourceManager:
                     if isinstance(resolved, dict):
                         return resolved
         return None
+
+    async def _publish_stream(self, datasource_id: UUID, entity: Dict[str, Any]) -> None:
+        """Publish a live entity payload to the websocket stream."""
+        redis_client = await self._get_redis()
+        if not redis_client:
+            return
+        topic = f"datasource.{datasource_id}"
+        payload = {
+            "t": "datasource.entity",
+            "datasourceId": str(datasource_id),
+            "data": entity,
+            "ts": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            await redis_client.publish(os.getenv("WS_CHANNEL", "halcyon.stream"), json.dumps({
+                "topic": topic,
+                **payload,
+            }))
+        except Exception as exc:
+            logger.error("Failed to publish datasource stream message: %s", exc)
 
     async def _resolve_secrets(
         self,

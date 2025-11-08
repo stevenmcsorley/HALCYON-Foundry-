@@ -55,6 +55,10 @@ services:
     environment:
       DATASOURCES_DIR: /app/datasources
       ONTOLOGY_BASE_URL: http://ontology:8081
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-halcyon-dev}
+      KEYCLOAK_CLIENT_ID: ${REGISTRY_KEYCLOAK_CLIENT_ID:-halcyon-registry}
+      KEYCLOAK_CLIENT_SECRET: ${REGISTRY_KEYCLOAK_CLIENT_SECRET:-halcyon-registry-secret}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

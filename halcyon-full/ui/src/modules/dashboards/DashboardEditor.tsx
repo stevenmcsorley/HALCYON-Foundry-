@@ -43,6 +43,7 @@ export default function DashboardEditor() {
     defaultValue: ''
   })
   const importInputRef = React.useRef<HTMLInputElement | null>(null)
+  const [datasources, setDatasources] = React.useState<Array<{ id: string; name: string; status?: string }>>([])
 
   // Filter dashboards by role
   const userRoles = user?.roles || []
@@ -57,6 +58,21 @@ export default function DashboardEditor() {
     loadDashboards()
     loadQueries()
   }, [loadDashboards, loadQueries])
+
+  React.useEffect(() => {
+    let cancelled = false
+    savedApi
+      .listDatasources()
+      .then((items) => {
+        if (!cancelled) setDatasources(items)
+      })
+      .catch(() => {
+        if (!cancelled) setDatasources([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   React.useEffect(() => {
     if (current) {
@@ -115,8 +131,20 @@ export default function DashboardEditor() {
         return
       }
     }
+    const nextConfig: Record<string, unknown> = {
+      ...(panel.config || {}),
+      ...(queryId !== undefined ? { queryId } : {}),
+    }
+    if (panel.refreshSec !== undefined) {
+      nextConfig.refreshSec = panel.refreshSec
+    }
+
     try {
-      await savedApi.updatePanel(current, panelId, { queryId })
+      await savedApi.updatePanel(current, panelId, {
+        queryId,
+        refreshSec: panel.refreshSec,
+        config: nextConfig,
+      })
       await loadPanels(current)
     } catch (e: any) {
       setAlertDialog({ isOpen: true, title: 'Error', message: e.message, variant: 'error' })
@@ -126,8 +154,81 @@ export default function DashboardEditor() {
   const updatePanelRefresh = async (panelId: string, refreshSec: number | undefined) => {
     if (!current) return
     const clamped = refreshSec ? Math.max(5, Math.min(86400, refreshSec)) : undefined
+    const panel = currPanels.find((p) => p.id === panelId)
+    const nextConfig: Record<string, unknown> = {
+      ...(panel?.config || {}),
+      ...(panel?.queryId ? { queryId: panel.queryId } : {}),
+      ...(panel?.config?.liveSourceId ? { liveSourceId: panel.config.liveSourceId } : {}),
+      ...(panel?.config?.liveLimit ? { liveLimit: panel.config.liveLimit } : {}),
+    }
+    if (clamped !== undefined) {
+      nextConfig.refreshSec = clamped
+    } else {
+      delete nextConfig.refreshSec
+    }
     try {
-      await savedApi.updatePanel(current, panelId, { refreshSec: clamped })
+      await savedApi.updatePanel(current, panelId, { refreshSec: clamped, config: nextConfig })
+      await loadPanels(current)
+    } catch (e: any) {
+      setAlertDialog({ isOpen: true, title: 'Error', message: e.message, variant: 'error' })
+    }
+  }
+
+  const updatePanelLiveSource = async (panelId: string, sourceId: string | undefined) => {
+    if (!current) return
+    const panel = currPanels.find((p) => p.id === panelId)
+    if (!panel) return
+    const nextConfig: Record<string, unknown> = {
+      ...(panel.config || {}),
+      ...(panel.queryId ? { queryId: panel.queryId } : {}),
+    }
+    if (panel.refreshSec !== undefined) {
+      nextConfig.refreshSec = panel.refreshSec
+    }
+    if (sourceId) {
+      nextConfig.liveSourceId = sourceId
+    } else {
+      delete nextConfig.liveSourceId
+    }
+
+    try {
+      await savedApi.updatePanel(current, panelId, {
+        config: nextConfig,
+        queryId: panel.queryId,
+        refreshSec: panel.refreshSec,
+      })
+      await loadPanels(current)
+    } catch (e: any) {
+      setAlertDialog({ isOpen: true, title: 'Error', message: e.message, variant: 'error' })
+    }
+  }
+
+  const updatePanelLiveLimit = async (panelId: string, liveLimit: number | undefined) => {
+    if (!current) return
+    const panel = currPanels.find((p) => p.id === panelId)
+    if (!panel) return
+    const nextConfig: Record<string, unknown> = {
+      ...(panel.config || {}),
+      ...(panel.queryId ? { queryId: panel.queryId } : {}),
+    }
+    if (panel.refreshSec !== undefined) {
+      nextConfig.refreshSec = panel.refreshSec
+    }
+    if (panel.config?.liveSourceId) {
+      nextConfig.liveSourceId = panel.config.liveSourceId
+    }
+    if (liveLimit && liveLimit > 0) {
+      nextConfig.liveLimit = liveLimit
+    } else {
+      delete nextConfig.liveLimit
+    }
+
+    try {
+      await savedApi.updatePanel(current, panelId, {
+        config: nextConfig,
+        queryId: panel.queryId,
+        refreshSec: panel.refreshSec,
+      })
       await loadPanels(current)
     } catch (e: any) {
       setAlertDialog({ isOpen: true, title: 'Error', message: e.message, variant: 'error' })
@@ -598,6 +699,10 @@ export default function DashboardEditor() {
                         const query: SavedQuery | undefined = queries.find((q) => q.id === p.queryId)
                         const expectedShape = getExpectedShape(p.type)
                         const shapeLabel = p.queryId ? getShapeLabel(query?.shapeHint ?? 'unknown') : getShapeLabel(expectedShape)
+                        const panelConfig = (p.config || {}) as Record<string, any>
+                        const liveSourceId = typeof panelConfig.liveSourceId === 'string' ? panelConfig.liveSourceId : ''
+                        const liveLimit = panelConfig.liveLimit ? Number(panelConfig.liveLimit) : 200
+                        const supportsLive = ['table', 'graph', 'geoheat', 'map', 'metric'].includes(p.type)
                         return (
                           <Card
                             key={p.id}
@@ -675,6 +780,57 @@ export default function DashboardEditor() {
                                   )}
                                 </div>
 
+                                {supportsLive && (
+                                  <div className="grid gap-2">
+                                    <div>
+                                      <label className="text-xs text-white/60 block">Live Source</label>
+                                      <div className="relative mt-1">
+                                        <select
+                                          value={liveSourceId}
+                                          onChange={(e) => updatePanelLiveSource(p.id, e.target.value || undefined)}
+                                          className="w-full appearance-none rounded-md border border-white/15 bg-black/40 px-3 py-2 pr-8 text-sm text-white focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+                                        >
+                                          <option value="">— No live stream —</option>
+                                          {datasources.map((ds) => (
+                                            <option key={ds.id} value={ds.id}>
+                                              {ds.name} {ds.status ? `(${ds.status})` : ''}
+                                            </option>
+                                          ))}
+                                        </select>
+                                        <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-white/40">
+                                          ▾
+                                        </span>
+                                      </div>
+                                      <p className="text-[11px] text-white/40 mt-1">
+                                        Bind a datasource to stream dashboard updates via WebSocket.
+                                      </p>
+                                    </div>
+                                    {liveSourceId && (
+                                      <div className="grid grid-cols-[minmax(0,0.65fr)_minmax(0,1fr)] gap-2">
+                                        <div>
+                                          <label className="text-xs text-white/60 block">Live buffer (rows)</label>
+                                          <input
+                                            type="number"
+                                            min={10}
+                                            max={5000}
+                                            value={liveLimit || 200}
+                                            onChange={(e) =>
+                                              updatePanelLiveLimit(
+                                                p.id,
+                                                e.target.value ? Math.max(10, Math.min(5000, parseInt(e.target.value, 10))) : undefined,
+                                              )
+                                            }
+                                            className="mt-1 w-full bg-white/5 border border-emerald-500/40 rounded px-2 py-2 text-sm text-white focus:outline-none focus:border-emerald-400"
+                                          />
+                                        </div>
+                                        <div className="text-[11px] text-emerald-200/70 bg-emerald-500/10 border border-emerald-500/30 rounded px-3 py-2">
+                                          Streaming enabled – refresh interval is ignored while live updates arrive.
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
                                 <div className="grid grid-cols-2 gap-2">
                                   <div>
                                     <label className="text-xs text-white/60 block">Refresh (sec)</label>
@@ -684,8 +840,14 @@ export default function DashboardEditor() {
                                       max="86400"
                                       value={p.refreshSec || 30}
                                       onChange={(e) => updatePanelRefresh(p.id, e.target.value ? parseInt(e.target.value) : undefined)}
-                                      className="mt-1 w-full bg-white/5 border border-white/15 rounded px-2 py-2 text-sm text-white focus:outline-none focus:border-teal-400"
+                                      disabled={Boolean(liveSourceId)}
+                                      className="mt-1 w-full bg-white/5 border border-white/15 rounded px-2 py-2 text-sm text-white focus:outline-none focus:border-teal-400 disabled:opacity-40 disabled:cursor-not-allowed"
                                     />
+                                    {liveSourceId && (
+                                      <p className="text-[11px] text-white/45 mt-1">
+                                        Refresh scheduling is paused while live streaming is active.
+                                      </p>
+                                    )}
                                   </div>
                                   <div>
                                     <label className="text-xs text-white/60 block">Expected shape</label>

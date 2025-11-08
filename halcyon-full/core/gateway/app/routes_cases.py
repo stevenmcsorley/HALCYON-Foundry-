@@ -167,7 +167,7 @@ async def post_assign_alerts(
         # Emit WebSocket updates for assigned alerts
         from .repo_alerts import get_alert
         for alert_id in payload.alert_ids:
-            alert = await get_alert(conn, alert_id)
+            alert = await get_alert(alert_id)
             if alert:
                 await hub.publish({
                     "t": "alert.updated",

@@ -118,7 +118,7 @@ async def verify_token(token: str) -> Optional[Dict]:
         # - Gateway client ID (halcyon-gateway) if client-to-client tokens
         # Some Keycloak tokens (especially from public clients) may not have audience
         # Only validate audience if it's present in the token
-        verify_options = {"verify_aud": has_audience}
+        verify_options = {"verify_aud": False}
         decode_kwargs = {
             "algorithms": [settings.jwt_algorithm],
             "issuer": issuer,
@@ -128,13 +128,25 @@ async def verify_token(token: str) -> Optional[Dict]:
         if has_audience:
             from .config import settings as config_settings
             realm_name = config_settings.keycloak_realm
-            valid_audiences = [
+            valid_audiences = {
                 "account",  # Keycloak account service
                 realm_name,  # Realm name
                 "halcyon-ui",  # UI client ID
                 config_settings.keycloak_client_id,  # Gateway client ID (for client-to-client)
-            ]
-            decode_kwargs["audience"] = valid_audiences
+            }
+            aud_claim = unverified_payload.get("aud")
+            if isinstance(aud_claim, str):
+                if aud_claim not in valid_audiences:
+                    logger.warning(f"Unexpected audience in token: {aud_claim}")
+                    return None
+            elif isinstance(aud_claim, (list, tuple, set)):
+                match = next((aud for aud in aud_claim if aud in valid_audiences), None)
+                if not match:
+                    logger.warning(f"Unexpected audience list in token: {aud_claim}")
+                    return None
+            else:
+                logger.warning(f"Unsupported audience type in token: {type(aud_claim)}")
+                return None
 
         payload = jwt.decode(token, signing_key, **decode_kwargs)
         logger.debug(f"Token verified successfully for subject: {payload.get('sub')}")

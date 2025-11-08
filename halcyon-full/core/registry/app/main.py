@@ -121,6 +121,7 @@ async def start_connector(connector: Any) -> None:
     async def emit_with_gateway(raw, gateway_url=None):
         await original_emit(raw, gateway_url=settings.gateway_base_url)
     connector.emit = emit_with_gateway
+    logger.debug("Connector %s emit wrapper installed: %s -> %s", connector.connector_id, original_emit, connector.emit)
     
     try:
         await connector.start()

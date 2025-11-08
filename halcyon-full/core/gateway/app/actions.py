@@ -2,11 +2,21 @@
 import os
 import json
 import random
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, Tuple, Optional
 import httpx
 from .metrics import alert_notifications_total, alert_retry_total, alert_retry_exhausted_total
-from .repo_alerts import insert_action_log, select_pending_retries_update, mark_action_success, mark_action_retry, mark_action_failed
+from .repo_alerts import (
+    insert_action_log,
+    select_pending_retries_update,
+    mark_action_success,
+    mark_action_retry,
+    mark_action_failed,
+    log_action,
+)
+
+logger = logging.getLogger("gateway.actions")
 
 # Configuration from environment
 BACKOFF_SERIES = [int(x) for x in os.getenv("ACTIONS_BACKOFF_MINUTES", "1,5,15,60,120,240").split(",")]
@@ -82,10 +92,14 @@ async def dispatch_on_create(alert: Dict[str, Any], rule_route: Optional[Dict[st
         ok, err = await _send_slack(alert, rule_route["slack"])
         status = "success" if ok else "retry"
         
-        await insert_action_log(
-            alert_id, "slack", status, err if not ok else None,
-            0, None, {"summary": "slack create"}
-        )
+        try:
+            await insert_action_log(
+                alert_id, "slack", status, err if not ok else None,
+                0, None, {"summary": "slack create"}
+            )
+        except Exception as exc:  # pragma: no cover - legacy fallback
+            logger.warning("Falling back to legacy alert action log for slack: %s", exc)
+            await log_action(alert_id, "slack", status, error=err if not ok else None)
         
         alert_notifications_total.labels(dest="slack", status=status).inc()
         
@@ -99,10 +113,14 @@ async def dispatch_on_create(alert: Dict[str, Any], rule_route: Optional[Dict[st
         ok, err = await _send_webhook(alert, rule_route["webhook"])
         status = "success" if ok else "retry"
         
-        await insert_action_log(
-            alert_id, "webhook", status, err if not ok else None,
-            0, None, {"summary": "webhook create"}
-        )
+        try:
+            await insert_action_log(
+                alert_id, "webhook", status, err if not ok else None,
+                0, None, {"summary": "webhook create"}
+            )
+        except Exception as exc:  # pragma: no cover - legacy fallback
+            logger.warning("Falling back to legacy alert action log for webhook: %s", exc)
+            await log_action(alert_id, "webhook", status, error=err if not ok else None)
         
         alert_notifications_total.labels(dest="webhook", status=status).inc()
         
