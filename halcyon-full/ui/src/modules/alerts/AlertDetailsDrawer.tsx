@@ -51,7 +51,7 @@ export default function AlertDetailsDrawer({ alert, onClose }: AlertDetailsDrawe
         setEntityLoading(true);
         setEntityError(null);
         const res = await api.post("/graphql", {
-          query: "query($id: ID!){ entityById(id:$id){ id type attrs updatedAt } }",
+          query: "query($id: ID!){ entityById(id:$id){ id type attrs } }",
           variables: { id: alert.entityId },
         });
         if (cancelled) return;
