@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -334,7 +335,25 @@ async def start_datasource_endpoint(
     datasource_id: UUID,
     user=Depends(require_roles(["admin", "analyst"])),
 ):
-    return await _call_registry("POST", f"/internal/datasources/{datasource_id}/start")
+    result = await _call_registry("POST", f"/internal/datasources/{datasource_id}/start")
+    try:
+        await update_datasource(
+            datasource_id,
+            {
+                "status": "active",
+                "updated_by": user.get("sub"),
+            },
+        )
+        await record_event(
+            datasource_id,
+            "lifecycle_start",
+            user.get("sub"),
+            payload={"status": "active"},
+        )
+    except Exception as exc:
+        logger = logging.getLogger(__name__)
+        logger.warning("Failed to persist datasource %s start status: %s", datasource_id, exc)
+    return result
 
 
 @router.post("/{datasource_id}/stop", response_model=Dict[str, Any])
@@ -342,7 +361,25 @@ async def stop_datasource_endpoint(
     datasource_id: UUID,
     user=Depends(require_roles(["admin", "analyst"])),
 ):
-    return await _call_registry("POST", f"/internal/datasources/{datasource_id}/stop")
+    result = await _call_registry("POST", f"/internal/datasources/{datasource_id}/stop")
+    try:
+        await update_datasource(
+            datasource_id,
+            {
+                "status": "paused",
+                "updated_by": user.get("sub"),
+            },
+        )
+        await record_event(
+            datasource_id,
+            "lifecycle_stop",
+            user.get("sub"),
+            payload={"status": "paused"},
+        )
+    except Exception as exc:
+        logger = logging.getLogger(__name__)
+        logger.warning("Failed to persist datasource %s stop status: %s", datasource_id, exc)
+    return {**result, "status": "paused"}
 
 
 @router.post("/{datasource_id}/restart", response_model=Dict[str, Any])

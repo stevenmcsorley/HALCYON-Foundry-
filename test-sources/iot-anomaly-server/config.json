@@ -1,7 +1,7 @@
 {
   "connector": {
     "type": "http_poller",
-    "endpoint": "http://host.docker.internal:2997/events",
+    "endpoint": "http://192.168.1.183:2997/events",
     "schedule": "every 30s",
     "timeout_ms": 5000
   },
@@ -22,8 +22,6 @@
       "floor": "$.sensor.floor",
       "latitude": "$.sensor.latitude",
       "longitude": "$.sensor.longitude",
-      "metrics": "$.metrics",
-      "thresholds": "$.thresholds",
       "anomaly_detector": "$.anomaly.detector",
       "anomaly_score": "$.anomaly.score",
       "anomaly_zscore": "$.anomaly.zScore",
@@ -34,7 +32,7 @@
       "ops_team": "$.notifications.opsTeam",
       "notification_channel": "$.notifications.channel",
       "recommended_actions": "$.recommended.actions",
-      "recommended_checklist": "$.recommended.checklist",
+      "recommended_checklist": "$.recommended.checklist[*].description",
       "recommended_playbook_id": "$.recommended.playbookId",
       "case_title": "$.caseTemplate.title",
       "case_summary": "$.caseTemplate.summary",

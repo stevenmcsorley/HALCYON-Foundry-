@@ -2,6 +2,25 @@
 
 All notable changes to HALCYON Foundry Core will be documented in this file.
 
+## [v4c-iot-anomaly] - 2025-11-08
+
+### Added
+- **Industry 4.0 Datasource Packs**
+  - `test-sources/iot-anomaly-server/external-config.json` for direct ingestion from hosted GitHub sample data
+  - Enhanced simulator with checklist, anomaly, and maintenance context plus configurable batch size via `IOT_BATCH_MIN` / `IOT_BATCH_MAX`
+- **Alert Entity Context**
+  - Gateway now streams full entity payload (`entity`, `entityAttrs`) alongside alerts
+  - Alert drawer surfaces sensor metadata, anomaly scores, recommended actions, and maintenance checklist
+
+### Changed
+- Alert store falls back to `firstSeen` when `createdAt` is omitted, eliminating `Created: N/A` gaps
+- UI alert drawer fetches entity details on-demand via GraphQL and presents a collapsible view of all attributes
+- README now documents IoT sample datasource options (hosted + local simulator)
+
+### Fixed
+- Datasource Start/Stop now persists `status` (`active` ↔ `paused`) so Registry does not auto-restart paused workers
+- Ontology upserts no longer fail on complex attributes; datasource mapping flattens checklist/actions to primitive arrays
+
 ## [v4b-ml-case-automation] - 2025-11-05
 
 ### Added

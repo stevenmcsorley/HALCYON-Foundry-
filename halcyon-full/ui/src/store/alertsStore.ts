@@ -2,7 +2,13 @@ import { create } from "zustand";
 import { api } from "@/services/api";
 import { subscribe } from "@/services/websocket";
 
-type Alert = {
+export type AlertEntity = {
+  id?: string;
+  type?: string;
+  attrs?: Record<string, any>;
+};
+
+export type Alert = {
   id: number;
   ruleId: number;
   entityId?: string;
@@ -28,6 +34,8 @@ type Alert = {
   suppressedByKind?: 'silence' | 'maintenance';
   suppressedById?: number;
   suppressedByName?: string;
+  entity?: AlertEntity;
+  entityAttrs?: Record<string, any>;
 };
 
 type Filters = { status?: string; severity?: string };
@@ -49,7 +57,7 @@ const normalizeAlert = (raw: any): Alert => ({
   message: raw.message,
   severity: raw.severity,
   status: raw.status,
-  createdAt: raw.createdAt ?? raw.created_at ?? "",
+  createdAt: raw.createdAt ?? raw.created_at ?? raw.firstSeen ?? raw.first_seen ?? "",
   acknowledgedAt: raw.acknowledgedAt ?? raw.acknowledged_at ?? undefined,
   resolvedAt: raw.resolvedAt ?? raw.resolved_at ?? undefined,
   acknowledgedBy: raw.acknowledgedBy ?? raw.acknowledged_by ?? undefined,
@@ -70,6 +78,8 @@ const normalizeAlert = (raw: any): Alert => ({
   suppressedByKind: raw.suppressedByKind ?? undefined,
   suppressedById: raw.suppressedById ?? undefined,
   suppressedByName: raw.suppressedByName ?? undefined,
+  entity: raw.entity ?? (raw.entity_type || raw.entity_attrs ? { id: raw.entity_id, type: raw.entity_type, attrs: raw.entity_attrs } : undefined),
+  entityAttrs: raw.entityAttrs ?? raw.entity_attrs ?? raw.entity?.attrs ?? undefined,
 });
 
 export const useAlertsStore = create<State>((set, get) => ({

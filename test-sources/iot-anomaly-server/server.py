@@ -22,6 +22,10 @@ from typing import Dict, List
 
 HOST = os.getenv("IOT_SERVER_HOST", "0.0.0.0")
 PORT = int(os.getenv("IOT_SERVER_PORT", "2997"))
+BATCH_MIN = int(os.getenv("IOT_BATCH_MIN", "1"))
+BATCH_MAX = int(os.getenv("IOT_BATCH_MAX", "1"))
+if BATCH_MAX < BATCH_MIN:
+    BATCH_MAX = BATCH_MIN
 
 NOW = time.time
 
@@ -316,7 +320,7 @@ class IoTEventHandler(BaseHTTPRequestHandler):
             return
 
         if clean_path == "/events":
-            batch_size = random.randint(2, 5)
+            batch_size = random.randint(BATCH_MIN, BATCH_MAX)
             events = [anomaly_payload(random.choice(SENSORS)) for _ in range(batch_size)]
             self._write_json(events)
             return

@@ -134,6 +134,8 @@ async def _run_rules_and_publish(entities):
                         "suppressedByKind": suppression["kind"] if is_suppressed_flag else None,
                         "suppressedById": suppression["id"] if is_suppressed_flag else None,
                         "suppressedByName": suppression["name"] if is_suppressed_flag else None,
+                        "entity": entity,
+                        "entityAttrs": entity.get("attrs"),
                     }})
 
                     # Dispatch actions (only on create and NOT suppressed)
@@ -183,4 +185,6 @@ async def _run_rules_and_publish(entities):
                         "suppressedByKind": suppression["kind"] if is_suppressed_flag else None,
                         "suppressedById": suppression["id"] if is_suppressed_flag else None,
                         "suppressedByName": suppression["name"] if is_suppressed_flag else None,
+                        "entity": entity,
+                        "entityAttrs": entity.get("attrs"),
                     }})

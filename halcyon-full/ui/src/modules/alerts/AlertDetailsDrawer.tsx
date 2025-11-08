@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
-import { Alert } from "@/store/alertsStore";
+import { useEffect, useMemo, useState } from "react";
+import { Alert, AlertEntity } from "@/store/alertsStore";
 import DeliveryTrace from "./DeliveryTrace";
 import RoutingPreview from "./RoutingPreview";
 import EnrichmentPanel from "@/modules/enrichment/EnrichmentPanel";
 import PlaybooksPanel from "@/modules/enrichment/PlaybooksPanel";
 import { useBindingsStore } from "@/store/bindingsStore";
 import { showToast } from "@/components/Toast";
+import { api } from "@/services/api";
 
 interface AlertDetailsDrawerProps {
   alert: Alert;
@@ -16,6 +17,9 @@ type Tab = "details" | "trace" | "preview" | "bindings" | "enrich" | "playbooks"
 
 export default function AlertDetailsDrawer({ alert, onClose }: AlertDetailsDrawerProps) {
   const [activeTab, setActiveTab] = useState<Tab>("details");
+  const [entityDetails, setEntityDetails] = useState<AlertEntity | null>(alert.entity ?? null);
+  const [entityLoading, setEntityLoading] = useState<boolean>(false);
+  const [entityError, setEntityError] = useState<string | null>(null);
   const {
     previewByAlertId,
     auditByAlertId,
@@ -37,6 +41,94 @@ export default function AlertDetailsDrawer({ alert, onClose }: AlertDetailsDrawe
       });
     }
   }, [activeTab, alert.id, preview, loadAudit]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchEntity = async () => {
+      if (alert.entity && alert.entity.attrs) return;
+      if (!alert.entityId) return;
+      try {
+        setEntityLoading(true);
+        setEntityError(null);
+        const res = await api.post("/graphql", {
+          query: "query($id: ID!){ entityById(id:$id){ id type attrs updatedAt } }",
+          variables: { id: alert.entityId },
+        });
+        if (cancelled) return;
+        const fetched = res.data?.data?.entityById;
+        if (fetched) {
+          setEntityDetails({
+            id: fetched.id,
+            type: fetched.type,
+            attrs: fetched.attrs ?? {},
+          });
+        }
+      } catch (error: any) {
+        if (!cancelled) {
+          setEntityError(error?.message || "Failed to load entity context");
+        }
+      } finally {
+        if (!cancelled) {
+          setEntityLoading(false);
+        }
+      }
+    };
+    fetchEntity();
+    return () => {
+      cancelled = true;
+    };
+  }, [alert.entity, alert.entityId]);
+
+  const combinedEntity = useMemo<AlertEntity | null>(() => {
+    if (entityDetails) return entityDetails;
+    if (alert.entity) return alert.entity;
+    if (alert.entityAttrs) return { id: alert.entityId, attrs: alert.entityAttrs };
+    return null;
+  }, [alert.entity, alert.entityAttrs, alert.entityId, entityDetails]);
+
+  const entityAttrs = useMemo<Record<string, any>>(() => {
+    return combinedEntity?.attrs ?? alert.entityAttrs ?? {};
+  }, [combinedEntity, alert.entityAttrs]);
+
+  const formatLabel = (key: string) =>
+    key
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+
+  const toArray = <T,>(value: T | T[] | undefined): T[] => {
+    if (Array.isArray(value)) return value;
+    if (value === undefined || value === null) return [];
+    return [value];
+  };
+
+  const highlightKeys = useMemo(
+    () => [
+      "scenario",
+      "sensor_id",
+      "machine_id",
+      "machine_type",
+      "facility",
+      "production_line",
+      "floor",
+      "primary_metric",
+      "anomaly_score",
+      "anomaly_zscore",
+      "cause_description",
+      "ops_team",
+      "notification_channel",
+      "recommended_playbook_id",
+      "case_priority",
+      "case_assignment",
+    ],
+    [],
+  );
+
+  const highlightedEntries = highlightKeys
+    .map((key) => ({ key, value: entityAttrs[key] }))
+    .filter((entry) => entry.value !== undefined && entry.value !== null);
+
+  const recommendedActions = toArray<string>(entityAttrs["recommended_actions"]);
+  const recommendedChecklist = toArray<string>(entityAttrs["recommended_checklist"]);
 
   const handleManualRun = async (bindingId: number | undefined | null) => {
     if (!bindingId) {
@@ -150,6 +242,92 @@ export default function AlertDetailsDrawer({ alert, onClose }: AlertDetailsDrawe
                   })()}
                 </p>
               </div>
+
+              {(entityLoading || entityError || highlightedEntries.length > 0 || recommendedActions.length > 0 || recommendedChecklist.length > 0) && (
+                <div className="border border-white/10 rounded-lg p-4 bg-black/20 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-white">Sensor / Entity Context</h3>
+                    {entityLoading && <span className="text-xs text-white/50">Loading context…</span>}
+                    {entityError && !entityLoading && <span className="text-xs text-red-300">{entityError}</span>}
+                  </div>
+                  {combinedEntity?.type && (
+                    <div className="grid grid-cols-2 gap-4 text-sm text-white/80">
+                      <div>
+                        <span className="text-white/50 text-xs uppercase tracking-wide">Entity Type</span>
+                        <p className="text-white mt-1">{combinedEntity.type}</p>
+                      </div>
+                      {combinedEntity.id && (
+                        <div>
+                          <span className="text-white/50 text-xs uppercase tracking-wide">Entity ID</span>
+                          <p className="text-white mt-1 break-all">{combinedEntity.id}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {highlightedEntries.length > 0 && (
+                    <div className="grid grid-cols-2 gap-3 text-sm text-white/80">
+                      {highlightedEntries.map(({ key, value }) => (
+                        <div key={key}>
+                          <span className="text-white/50 text-xs uppercase tracking-wide">
+                            {formatLabel(key)}
+                          </span>
+                          <p className="text-white mt-1 break-words">
+                            {Array.isArray(value) ? value.join(", ") : String(value)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {recommendedActions.length > 0 && (
+                    <div>
+                      <span className="text-white/50 text-xs uppercase tracking-wide">
+                        Recommended Actions
+                      </span>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {recommendedActions.map((action, idx) => (
+                          <span
+                            key={`${action}-${idx}`}
+                            className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-200 text-xs uppercase tracking-wide"
+                          >
+                            {action.replace(/_/g, " ")}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {recommendedChecklist.length > 0 && (
+                    <div>
+                      <span className="text-white/50 text-xs uppercase tracking-wide">
+                        Maintenance Checklist
+                      </span>
+                      <ol className="mt-2 space-y-1 text-sm text-white/80 list-decimal list-inside">
+                        {recommendedChecklist.map((item, idx) => (
+                          <li key={`${item}-${idx}`}>{item}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+
+                  {Object.keys(entityAttrs).length > 0 && (
+                    <details className="bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70">
+                      <summary className="cursor-pointer text-white">All attributes</summary>
+                      <div className="mt-2 space-y-1">
+                        {Object.entries(entityAttrs).map(([key, value]) => (
+                          <div key={key} className="flex gap-2">
+                            <span className="text-white/40 min-w-[140px] capitalize">{formatLabel(key)}</span>
+                            <span className="text-white/80 break-words">
+                              {typeof value === "object" ? JSON.stringify(value) : String(value)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

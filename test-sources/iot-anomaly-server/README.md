@@ -2,7 +2,7 @@
 
 Two ready-to-use configurations are provided:
 
-1. `config.json` – polling a locally hosted simulator (run with `IOT_SERVER_HOST=0.0.0.0 IOT_SERVER_PORT=2997 python3 server.py`).
+1. `config.json` – polling a locally hosted simulator (run with `IOT_SERVER_HOST=0.0.0.0 IOT_SERVER_PORT=2997 IOT_BATCH_MIN=1 IOT_BATCH_MAX=1 python3 server.py`).
 2. `external-config.json` – polling a public dataset hosted on GitHub over HTTPS (no local server required).
 
 ### External datasource (no local server)
@@ -17,10 +17,10 @@ Run locally if you want dynamic, randomly generated events:
 
 ```bash
 cd /home/dev/projects/HALCYON/test-sources/iot-anomaly-server
-IOT_SERVER_HOST=0.0.0.0 IOT_SERVER_PORT=2997 python3 server.py
+IOT_SERVER_HOST=0.0.0.0 IOT_SERVER_PORT=2997 IOT_BATCH_MIN=1 IOT_BATCH_MAX=1 python3 server.py
 ```
 
-Poll the simulator via `config.json` which points to `http://host.docker.internal:2997/events` so Docker services can ingest host traffic.
+Poll the simulator via `config.json` which points to `http://host.docker.internal:2997/events` so Docker services can ingest host traffic. Adjust `IOT_BATCH_MIN` / `IOT_BATCH_MAX` if you want bursts instead of single events.
 
 ### Datasource creation tips
 

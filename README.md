@@ -270,6 +270,9 @@ HALCYON's flexible architecture supports multiple scenarios with the same core p
 - Automatically notify operations teams of anomalies
 - Create cases with checklists for maintenance and investigation
 - Real-time dashboards for factory floor monitoring
+- Sample dataset ready to use:
+  - **External (no simulator required):** import `test-sources/iot-anomaly-server/external-config.json` to poll the hosted GitHub dataset every 60 s.
+  - **Local simulator:** run `IOT_SERVER_HOST=0.0.0.0 IOT_SERVER_PORT=2997 IOT_BATCH_MIN=1 IOT_BATCH_MAX=1 python3 server.py` inside `test-sources/iot-anomaly-server/` and import `config.json` for live telemetry.
 
 ### 💻 IT Ops / SRE
 **Flow**: Prometheus alerts → Routing preview + retries → Playbook to gather logs, open incident, post to Slack, create Jira
