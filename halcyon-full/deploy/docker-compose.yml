@@ -55,6 +55,8 @@ services:
     environment:
       DATASOURCES_DIR: /app/datasources
       ONTOLOGY_BASE_URL: http://ontology:8081
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ../datasources:/app/datasources:ro
     depends_on: [ ontology ]

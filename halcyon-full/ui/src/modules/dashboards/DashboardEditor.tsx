@@ -623,48 +623,53 @@ export default function DashboardEditor() {
                               <div className="grid gap-2">
                                 <div>
                                   <label className="text-xs text-white/60 block">Query</label>
-                                  <select
-                                    data-panel-id={p.id}
-                                    value={p.queryId || ''}
-                                    onChange={(e) => updatePanelQuery(p.id, e.target.value || undefined)}
-                                    className="mt-1 w-full bg-white/5 border border-white/15 rounded px-2 py-2 text-sm text-white focus:outline-none focus:border-teal-400"
-                                  >
-                                    <option value="">— No query —</option>
-                                    {(() => {
-                                      const compatible: SavedQuery[] = []
-                                      const incompatible: SavedQuery[] = []
+                                  <div className="relative mt-1">
+                                    <select
+                                      data-panel-id={p.id}
+                                      value={p.queryId || ''}
+                                      onChange={(e) => updatePanelQuery(p.id, e.target.value || undefined)}
+                                      className="w-full appearance-none rounded-md border border-white/15 bg-black/40 px-3 py-2 pr-8 text-sm text-white focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+                                    >
+                                      <option value="">— No query —</option>
+                                      {(() => {
+                                        const compatible: SavedQuery[] = []
+                                        const incompatible: SavedQuery[] = []
 
-                                      queries.forEach((q) => {
-                                        const shape: QueryShape = q.shapeHint || 'unknown'
-                                        const ok = isShapeCompatible(shape, p.type)
-                                        if (ok) compatible.push(q)
-                                        else incompatible.push(q)
-                                      })
+                                        queries.forEach((q) => {
+                                          const shape: QueryShape = q.shapeHint || 'unknown'
+                                          const ok = isShapeCompatible(shape, p.type)
+                                          if (ok) compatible.push(q)
+                                          else incompatible.push(q)
+                                        })
 
-                                      return (
-                                        <>
-                                          {compatible.length > 0 && (
-                                            <optgroup label="✓ Compatible">
-                                              {compatible.map((q) => (
-                                                <option key={q.id} value={q.id}>
-                                                  {q.name} {q.shapeHint && `[${getShapeLabel(q.shapeHint)}]`}
-                                                </option>
-                                              ))}
-                                            </optgroup>
-                                          )}
-                                          {incompatible.length > 0 && (
-                                            <optgroup label="⚠ Incompatible">
-                                              {incompatible.map((q) => (
-                                                <option key={q.id} value={q.id} disabled>
-                                                  {q.name} {q.shapeHint && `[${getShapeLabel(q.shapeHint)}]`}
-                                                </option>
-                                              ))}
-                                            </optgroup>
-                                          )}
-                                        </>
-                                      )
-                                    })()}
-                                  </select>
+                                        return (
+                                          <>
+                                            {compatible.length > 0 && (
+                                              <optgroup label="✓ Compatible" className="text-white/70 bg-black">
+                                                {compatible.map((q) => (
+                                                  <option key={q.id} value={q.id}>
+                                                    {q.name} {q.shapeHint && `[${getShapeLabel(q.shapeHint)}]`}
+                                                  </option>
+                                                ))}
+                                              </optgroup>
+                                            )}
+                                            {incompatible.length > 0 && (
+                                              <optgroup label="⚠ Incompatible" className="text-white/40 bg-black">
+                                                {incompatible.map((q) => (
+                                                  <option key={q.id} value={q.id} disabled>
+                                                    {q.name} {q.shapeHint && `[${getShapeLabel(q.shapeHint)}]`}
+                                                  </option>
+                                                ))}
+                                              </optgroup>
+                                            )}
+                                          </>
+                                        )
+                                      })()}
+                                    </select>
+                                    <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-white/40">
+                                      ▾
+                                    </span>
+                                  </div>
                                   {!p.queryId && (
                                     <p className="text-xs text-white/45 italic mt-1">{getPanelHint(p.type)}</p>
                                   )}

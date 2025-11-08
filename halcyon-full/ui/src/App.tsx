@@ -15,10 +15,11 @@ import { useAlertsStore } from './store/alertsStore'
 import { useSavedStore } from './store/savedStore'
 import { ConsoleSummary } from './modules/console/ConsoleSummary'
 import DashboardConsoleView from './modules/dashboards/DashboardConsoleView'
+import { DatasourceStudio } from './modules/datasources/DatasourceStudio'
 import * as auth from './services/auth'
 import { Toast, subscribeToToast } from './components/Toast'
 
-type Tab = 'console' | 'saved' | 'dashboards' | 'alerts' | 'cases' | 'playbooks'
+type Tab = 'console' | 'saved' | 'dashboards' | 'alerts' | 'cases' | 'playbooks' | 'datasources'
 
 function MainLayout() {
   const { user } = useAuthStore()
@@ -50,6 +51,7 @@ function MainLayout() {
     if (path === '/alerts') return 'alerts'
     if (path === '/cases') return 'cases'
     if (path === '/playbooks') return 'playbooks'
+    if (path === '/datasources') return 'datasources'
     return 'console'
   }
 
@@ -213,6 +215,18 @@ function MainLayout() {
             Playbooks
           </button>
         )}
+        {(hasRole('analyst') || hasRole('admin') || hasRole('viewer')) && (
+          <button
+            className={`px-3 py-2 text-sm font-medium ${
+              activeTab === 'datasources'
+                ? 'border-b-2 border-white text-white'
+                : 'opacity-70 hover:opacity-100 text-white'
+            }`}
+            onClick={() => navigate('/datasources')}
+          >
+            Datasources
+          </button>
+        )}
       </div>
 
       <Routes>
@@ -280,6 +294,18 @@ function MainLayout() {
             (hasRole('analyst') || hasRole('admin') || hasRole('viewer')) ? (
               <div className="h-[calc(100vh-8rem)] overflow-hidden">
                 <PlaybookStudio />
+              </div>
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
+          path="/datasources"
+          element={
+            (hasRole('analyst') || hasRole('admin') || hasRole('viewer')) ? (
+              <div className="h-[calc(100vh-8rem)] overflow-hidden">
+                <DatasourceStudio />
               </div>
             ) : (
               <Navigate to="/" replace />

@@ -154,6 +154,7 @@ async def create_datasource_endpoint(
     user=Depends(require_roles(["admin", "analyst"])),
 ):
     data = payload.model_dump()
+    status_value = data.get("status") or "draft"
     created = await create_datasource(
         {
             "name": data["name"],
@@ -163,11 +164,11 @@ async def create_datasource_endpoint(
             "org_id": data.get("orgId"),
             "project_id": data.get("projectId"),
             "tags": data.get("tags") or [],
-            "status": data.get("status", "draft"),
+            "status": status_value,
             "created_by": user.get("sub"),
         }
     )
-    await record_event(created["id"], "create", user.get("sub"), payload={"status": created.get("status")})
+    await record_event(created["id"], "create", user.get("sub"), payload={"status": status_value})
     return _to_api(created)
 
 

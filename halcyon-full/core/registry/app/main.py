@@ -237,6 +237,12 @@ async def get_source_config(source_id: str):
             "id": connector.connector_id,
             "mapping": connector.config.get("mapping", {}),
         }
+    config = await datasource_manager.get_connector_config(source_id)
+    if config:
+        return {
+            "id": source_id,
+            "mapping": config.get("mapping", {}),
+        }
     return {"error": "Source not found"}
 
 

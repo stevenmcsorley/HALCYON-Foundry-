@@ -171,7 +171,7 @@ async def create_datasource(payload: Dict[str, Any]) -> Dict[str, Any]:
             payload.get("org_id"),
             payload.get("project_id"),
             payload.get("tags", []),
-            payload.get("status", "draft"),
+            payload.get("status") or "draft",
             payload.get("created_by"),
         )
         return _row_to_datasource(row)

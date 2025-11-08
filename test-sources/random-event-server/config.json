@@ -1,0 +1,21 @@
+{
+    "connector": {
+      "type": "http_poller",
+      "endpoint": "http://host.docker.internal:1997/events",
+      "schedule": "every 30s",
+      "timeout_ms": 5000
+    },
+    "mapping": {
+      "entity_type": "Endpoint",
+      "id": "$.events[*].eventId",
+      "attrs": {
+        "hostname": "$.events[*].entity.id",
+        "ip": "$.events[*].entity.ip",
+        "severity": "$.events[*].severity",
+        "source_system": "$.events[*].source.system",
+        "region": "$.events[*].source.region",
+        "score": "$.events[*].score",
+        "tags": "$.events[*].tags"
+      }
+    }
+  }

@@ -40,6 +40,8 @@ setup_logging()
 
 type_defs = load_schema_from_path("app/schema.graphql")
 
+datetime_scalar = ScalarType("DateTime")
+
 
 @datetime_scalar.serializer
 def serialize_datetime(value):

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
-from typing import List, Optional, Set
+from typing import Dict, List, Optional, Set
 from uuid import UUID
 import asyncpg
 import json
@@ -20,6 +20,28 @@ def get_owner(request: Request) -> str:
     if not user:
         return "anonymous"
     return user.get("sub", "anonymous")
+
+
+# Panel shape guardrails must stay in sync with ui/src/lib/queryShapes.ts
+ALLOWED_PANEL_SHAPES: Dict[str, Set[str]] = {
+    "table": {"entities"},
+    "list": {"entities"},
+    "graph": {"entities"},
+    "map": {"geo", "entities"},
+    "timeline": {"counts"},
+    "metric": {"metric"},
+    "topbar": {"items", "entities"},
+    "geoheat": {"geo"},
+}
+
+
+def _is_shape_compatible(panel_type: str, shape_hint: Optional[str]) -> bool:
+    if not shape_hint or shape_hint == "unknown":
+        return True
+    allowed = ALLOWED_PANEL_SHAPES.get(panel_type)
+    if not allowed:
+        return True
+    return shape_hint in allowed
 
 
 # Saved Queries routes

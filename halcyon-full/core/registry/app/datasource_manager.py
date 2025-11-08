@@ -6,6 +6,7 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import wraps
 from typing import Any, Dict, Optional
 from uuid import UUID
 
@@ -72,7 +73,14 @@ class DatasourceManager:
         datasources: Dict[UUID, Dict[str, Any]] = {}
         for row in rows:
             datasource_id: UUID = row["id"]
-            config = row["config_json"] or {}
+            raw_config = row["config_json"]
+            if isinstance(raw_config, str):
+                try:
+                    config = json.loads(raw_config)
+                except json.JSONDecodeError:
+                    config = {}
+            else:
+                config = raw_config or {}
             datasources[datasource_id] = {
                 "id": datasource_id,
                 "name": row["name"],
@@ -243,7 +251,13 @@ class DatasourceManager:
                 )
         if not row:
             return None
-        return row["config_json"]
+        raw_config = row["config_json"]
+        if isinstance(raw_config, str):
+            try:
+                return json.loads(raw_config)
+            except json.JSONDecodeError:
+                return {}
+        return raw_config or {}
 
     async def _start_worker(self, datasource_id: UUID, info: Dict[str, Any]) -> None:
         existing = self._workers.get(datasource_id)
@@ -336,20 +350,57 @@ class DatasourceManager:
             payload.pop("type", None)
             payload.pop("id", None)
             payload["mapping"] = mapping
-            return WebhookConnector(connector_id, payload)
+            connector = WebhookConnector(connector_id, payload)
+            self._attach_state_hooks(datasource_id, connector)
+            return connector
         if kind == "http_poller":
             payload = {**connector_cfg}
             payload.pop("type", None)
             payload.pop("id", None)
             payload["mapping"] = mapping
-            return HttpPollerConnector(connector_id, payload)
+            connector = HttpPollerConnector(connector_id, payload)
+            self._attach_state_hooks(datasource_id, connector)
+            return connector
         if kind == "kafka":
             payload = {**connector_cfg}
             payload.pop("type", None)
             payload.pop("id", None)
             payload["mapping"] = mapping
-            return KafkaConsumerConnector(connector_id, payload)
+            connector = KafkaConsumerConnector(connector_id, payload)
+            self._attach_state_hooks(datasource_id, connector)
+            return connector
 
+        return None
+
+    def _attach_state_hooks(self, datasource_id: UUID, connector: BaseConnector) -> None:
+        """Wrap connector.emit to update datasource state timestamps."""
+        original_emit = connector.emit
+
+        @wraps(original_emit)
+        async def emit_with_state(raw: Dict[str, Any], gateway_url: Optional[str] = None) -> None:
+            await original_emit(raw, gateway_url=gateway_url)
+            now = datetime.now(timezone.utc)
+            await self._update_state(
+                datasource_id,
+                last_event_at=now,
+                last_heartbeat_at=now,
+                worker_status="running",
+            )
+
+        connector.emit = emit_with_state  # type: ignore[assignment]
+
+    async def get_connector_config(self, connector_id: str) -> Optional[Dict[str, Any]]:
+        """Return the original config for a running connector."""
+        async with self._lock:
+            for managed in self._workers.values():
+                if managed.connector and managed.connector.connector_id == connector_id:
+                    config = managed.info.get("config")
+                    if isinstance(config, dict):
+                        return config
+                    # fallback to resolved config
+                    resolved = managed.info.get("resolved_config")
+                    if isinstance(resolved, dict):
+                        return resolved
         return None
 
     async def _resolve_secrets(
@@ -433,7 +484,7 @@ class DatasourceManager:
                 """
                 INSERT INTO datasource_state (
                     datasource_id,
-                    current_version,
+                    current_version
                 )
                 VALUES ($1, $2)
                 ON CONFLICT (datasource_id)
