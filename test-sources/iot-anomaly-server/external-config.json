@@ -1,0 +1,47 @@
+{
+  "connector": {
+    "type": "http_poller",
+    "endpoint": "https://raw.githubusercontent.com/stevenmcsorley/HALCYON-Foundry-/main/test-sources/iot-anomaly-server/sample_data.json",
+    "schedule": "every 60s",
+    "timeout_ms": 5000,
+    "verify_tls": true
+  },
+  "mapping": {
+    "entity_type": "Event",
+    "id": "$.eventId",
+    "attrs": {
+      "scenario": "$.scenario",
+      "eventType": "$.eventType",
+      "summary": "$.summary",
+      "severity": "$.severity",
+      "tags": "$.tags",
+      "sensor_id": "$.sensor.id",
+      "machine_id": "$.sensor.machineId",
+      "machine_type": "$.sensor.machineType",
+      "facility": "$.sensor.facility",
+      "production_line": "$.sensor.line",
+      "floor": "$.sensor.floor",
+      "latitude": "$.sensor.latitude",
+      "longitude": "$.sensor.longitude",
+      "metrics": "$.metrics",
+      "thresholds": "$.thresholds",
+      "anomaly_detector": "$.anomaly.detector",
+      "anomaly_score": "$.anomaly.score",
+      "anomaly_zscore": "$.anomaly.zScore",
+      "primary_metric": "$.anomaly.primaryMetric",
+      "persistence_seconds": "$.anomaly.persistenceSeconds",
+      "cause_key": "$.cause.key",
+      "cause_description": "$.cause.description",
+      "ops_team": "$.notifications.opsTeam",
+      "notification_channel": "$.notifications.channel",
+      "recommended_actions": "$.recommended.actions",
+      "recommended_checklist": "$.recommended.checklist",
+      "recommended_playbook_id": "$.recommended.playbookId",
+      "case_title": "$.caseTemplate.title",
+      "case_summary": "$.caseTemplate.summary",
+      "case_priority": "$.caseTemplate.priority",
+      "case_assignment": "$.caseTemplate.assignment"
+    }
+  }
+}
+

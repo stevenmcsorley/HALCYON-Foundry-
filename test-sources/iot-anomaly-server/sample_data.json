@@ -1,0 +1,298 @@
+[
+  {
+    "eventId": "8d3f4a8b-91c7-4f92-af4a-1a380c2719de",
+    "timestamp": "2025-11-08T10:05:00Z",
+    "scenario": "Industry4.0::Sensor Anomaly",
+    "eventType": "industry4.0.anomaly",
+    "summary": "Hydraulic Press (PRESS-02) pressure deviation detected at Gdansk Forging Hub",
+    "severity": "high",
+    "tags": ["industry4.0", "hydraulic_press", "pressure"],
+    "sensor": {
+      "id": "PRESS-L1-HYD-02",
+      "machineId": "PRESS-02",
+      "machineType": "Hydraulic Press",
+      "facility": "Gdansk Forging Hub",
+      "line": "Forge Line 1",
+      "floor": "L1",
+      "latitude": 54.352,
+      "longitude": 18.6466
+    },
+    "metrics": {
+      "pressure_bar": {"value": 342.6, "baseline": 310.0, "zScore": 2.73, "trend": "rising"},
+      "temperature_c": {"value": 71.4, "baseline": 68.5, "zScore": 0.69, "trend": "stable"},
+      "stroke_count": {"value": 892, "baseline": 820.0, "zScore": 1.03, "trend": "rising"}
+    },
+    "thresholds": {
+      "pressure_bar": {"upper": 340.0, "lower": 280.0},
+      "temperature_c": {"upper": 78.0, "lower": 59.0},
+      "stroke_count": {"upper": 995.0, "lower": 645.0}
+    },
+    "anomaly": {
+      "detector": "isolation_forest",
+      "score": 2.95,
+      "zScore": 2.73,
+      "primaryMetric": "pressure_bar",
+      "persistenceSeconds": 240
+    },
+    "cause": {
+      "key": "hydraulic_leak",
+      "description": "Hydraulic pressure surge detected — inspect accumulator valves"
+    },
+    "notifications": {
+      "opsTeam": "Predictive Maintenance Crew",
+      "channel": "slack"
+    },
+    "recommended": {
+      "actions": ["notify_operations", "isolate_hydraulic_circuit", "log_event_in_mes"],
+      "checklist": [
+        {"step": 1, "description": "Activate hydraulic isolation", "status": "pending"},
+        {"step": 2, "description": "Inspect accumulator valves", "status": "pending"},
+        {"step": 3, "description": "Top up hydraulic fluid reservoir", "status": "pending"}
+      ],
+      "playbookId": "pb-hydraulic-leak"
+    },
+    "caseTemplate": {
+      "title": "High anomaly for PRESS-02",
+      "summary": "Hydraulic pressure spike on PRESS-02",
+      "priority": "P1",
+      "assignment": "Maintenance Tier 1"
+    }
+  },
+  {
+    "eventId": "d9586d44-f9e4-41a3-95cf-f4e3d92f19d8",
+    "timestamp": "2025-11-08T10:05:00Z",
+    "scenario": "Industry4.0::Sensor Anomaly",
+    "eventType": "industry4.0.anomaly",
+    "summary": "Welding Robot (ROBOT-12) cycle time drift identified on Line C",
+    "severity": "medium",
+    "tags": ["industry4.0", "welding", "cycle_time"],
+    "sensor": {
+      "id": "FLOOR-L1-ROBOT-12",
+      "machineId": "ROBOT-12",
+      "machineType": "Welding Robot",
+      "facility": "Prague Assembly Plant",
+      "line": "Line C",
+      "floor": "L1",
+      "latitude": 50.1115,
+      "longitude": 14.2792
+    },
+    "metrics": {
+      "cycle_time_ms": {"value": 1512, "baseline": 1380.0, "zScore": 2.93, "trend": "rising"},
+      "temperature_c": {"value": 55.9, "baseline": 54.0, "zScore": 0.83, "trend": "stable"},
+      "hydraulic_bar": {"value": 171.3, "baseline": 175.0, "zScore": -0.53, "trend": "falling"}
+    },
+    "thresholds": {
+      "cycle_time_ms": {"upper": 1505.0, "lower": 1255.0},
+      "temperature_c": {"upper": 59.8, "lower": 48.2},
+      "hydraulic_bar": {"upper": 192.5, "lower": 157.5}
+    },
+    "anomaly": {
+      "detector": "zscore",
+      "score": 2.11,
+      "zScore": 2.93,
+      "primaryMetric": "cycle_time_ms",
+      "persistenceSeconds": 180
+    },
+    "cause": {
+      "key": "misalignment",
+      "description": "Motion profile variance — verify robot calibration"
+    },
+    "notifications": {
+      "opsTeam": "Factory Floor Ops - Shift B",
+      "channel": "pagerduty"
+    },
+    "recommended": {
+      "actions": ["notify_operations", "apply_condition_based_maintenance"],
+      "checklist": [
+        {"step": 1, "description": "Run auto-alignment check", "status": "pending"},
+        {"step": 2, "description": "Verify torque calibration", "status": "pending"},
+        {"step": 3, "description": "Schedule recalibration if deviation persists", "status": "pending"}
+      ],
+      "playbookId": "pb-misalignment"
+    },
+    "caseTemplate": {
+      "title": "Cycle anomaly for ROBOT-12",
+      "summary": "Auto TIG welder cycle time drift requiring calibration",
+      "priority": "P2",
+      "assignment": "Operations Command"
+    }
+  },
+  {
+    "eventId": "a7f5df59-5850-498d-9a43-00cbfcbceda1",
+    "timestamp": "2025-11-08T10:05:00Z",
+    "scenario": "Industry4.0::Sensor Anomaly",
+    "eventType": "industry4.0.anomaly",
+    "summary": "Clean-room HVAC (HVAC-05) VOC increase in Brno Coating Center",
+    "severity": "high",
+    "tags": ["industry4.0", "hvac", "voc"],
+    "sensor": {
+      "id": "PAINT-L3-HVAC-05",
+      "machineId": "HVAC-05",
+      "machineType": "Clean-room HVAC",
+      "facility": "Brno Coating Center",
+      "line": "Paint Zone",
+      "floor": "L3",
+      "latitude": 49.1951,
+      "longitude": 16.608
+    },
+    "metrics": {
+      "voc_ppm": {"value": 412.0, "baseline": 290.0, "zScore": 3.05, "trend": "rising"},
+      "temperature_c": {"value": 22.6, "baseline": 21.5, "zScore": 1.1, "trend": "rising"},
+      "humidity_pct": {"value": 44.7, "baseline": 41.0, "zScore": 1.06, "trend": "rising"}
+    },
+    "thresholds": {
+      "voc_ppm": {"upper": 390.0, "lower": 190.0},
+      "temperature_c": {"upper": 24.0, "lower": 19.0},
+      "humidity_pct": {"upper": 49.8, "lower": 32.3}
+    },
+    "anomaly": {
+      "detector": "isolation_forest",
+      "score": 3.2,
+      "zScore": 3.05,
+      "primaryMetric": "voc_ppm",
+      "persistenceSeconds": 420
+    },
+    "cause": {
+      "key": "clogged_filter",
+      "description": "VOC spike indicates filtration degradation — replace filter cartridges"
+    },
+    "notifications": {
+      "opsTeam": "Industrial Engineering Response",
+      "channel": "email"
+    },
+    "recommended": {
+      "actions": ["notify_operations", "apply_condition_based_maintenance", "log_event_in_mes"],
+      "checklist": [
+        {"step": 1, "description": "Inspect differential pressure gauge", "status": "pending"},
+        {"step": 2, "description": "Replace HEPA/carbon cartridges", "status": "pending"},
+        {"step": 3, "description": "Record VOC readings post-reset", "status": "pending"}
+      ],
+      "playbookId": "pb-clogged-filter"
+    },
+    "caseTemplate": {
+      "title": "VOC anomaly in paint zone",
+      "summary": "Clean-room VOC levels above tolerance",
+      "priority": "P1",
+      "assignment": "Maintenance Tier 2"
+    }
+  },
+  {
+    "eventId": "db83236f-7d2c-4e3c-a9e1-8ddbeedb70fd",
+    "timestamp": "2025-11-08T10:05:00Z",
+    "scenario": "Industry4.0::Sensor Anomaly",
+    "eventType": "industry4.0.anomaly",
+    "summary": "CNC Lathe (LATHE-07) vibration increase on Line A",
+    "severity": "medium",
+    "tags": ["industry4.0", "lathe", "vibration"],
+    "sensor": {
+      "id": "FLOOR-L2-LATHE-07",
+      "machineId": "LATHE-07",
+      "machineType": "CNC Lathe",
+      "facility": "Prague Assembly Plant",
+      "line": "Line A",
+      "floor": "L2",
+      "latitude": 50.1109,
+      "longitude": 14.2757
+    },
+    "metrics": {
+      "vibration_mm_s": {"value": 4.7, "baseline": 3.2, "zScore": 2.5, "trend": "rising"},
+      "temperature_c": {"value": 63.9, "baseline": 62.0, "zScore": 0.54, "trend": "stable"},
+      "current_amp": {"value": 32.1, "baseline": 28.0, "zScore": 1.03, "trend": "rising"}
+    },
+    "thresholds": {
+      "vibration_mm_s": {"upper": 4.7, "lower": 1.7},
+      "temperature_c": {"upper": 70.8, "lower": 53.2},
+      "current_amp": {"upper": 38.0, "lower": 18.0}
+    },
+    "anomaly": {
+      "detector": "zscore",
+      "score": 2.2,
+      "zScore": 2.5,
+      "primaryMetric": "vibration_mm_s",
+      "persistenceSeconds": 300
+    },
+    "cause": {
+      "key": "bearing_wear",
+      "description": "Spindle vibration suggests bearing wear — inspect lubrication"
+    },
+    "notifications": {
+      "opsTeam": "Factory Floor Ops - Shift A",
+      "channel": "slack"
+    },
+    "recommended": {
+      "actions": ["notify_operations", "apply_condition_based_maintenance"],
+      "checklist": [
+        {"step": 1, "description": "Pause machine and allow to cool", "status": "pending"},
+        {"step": 2, "description": "Inspect spindle bearing lubrication", "status": "pending"},
+        {"step": 3, "description": "Collect vibration readings post-inspection", "status": "pending"}
+      ],
+      "playbookId": "pb-bearing-wear"
+    },
+    "caseTemplate": {
+      "title": "Vibration anomaly for LATHE-07",
+      "summary": "Bearing wear suspected on CNC lathe LATHE-07",
+      "priority": "P2",
+      "assignment": "Maintenance Tier 1"
+    }
+  },
+  {
+    "eventId": "4eaa88ce-0d7e-4d77-ac76-8141879ac41c",
+    "timestamp": "2025-11-08T10:05:00Z",
+    "scenario": "Industry4.0::Sensor Anomaly",
+    "eventType": "industry4.0.anomaly",
+    "summary": "Assembly line conveyor motor current spike on Line B",
+    "severity": "medium",
+    "tags": ["industry4.0", "conveyor", "current"],
+    "sensor": {
+      "id": "FLOOR-L1-CONV-04",
+      "machineId": "CONV-04",
+      "machineType": "Assembly Conveyor",
+      "facility": "Prague Assembly Plant",
+      "line": "Line B",
+      "floor": "L1",
+      "latitude": 50.1127,
+      "longitude": 14.2773
+    },
+    "metrics": {
+      "current_amp": {"value": 46.2, "baseline": 36.0, "zScore": 2.55, "trend": "rising"},
+      "temperature_c": {"value": 58.4, "baseline": 52.0, "zScore": 1.83, "trend": "rising"},
+      "load_pct": {"value": 87.0, "baseline": 70.0, "zScore": 2.27, "trend": "rising"}
+    },
+    "thresholds": {
+      "current_amp": {"upper": 45.0, "lower": 27.0},
+      "temperature_c": {"upper": 61.5, "lower": 42.5},
+      "load_pct": {"upper": 87.5, "lower": 52.5}
+    },
+    "anomaly": {
+      "detector": "isolation_forest",
+      "score": 2.6,
+      "zScore": 2.55,
+      "primaryMetric": "current_amp",
+      "persistenceSeconds": 210
+    },
+    "cause": {
+      "key": "overload",
+      "description": "Motor current spike suggests mechanical load — inspect conveyor rollers"
+    },
+    "notifications": {
+      "opsTeam": "Factory Floor Ops - Shift C",
+      "channel": "pagerduty"
+    },
+    "recommended": {
+      "actions": ["notify_operations", "log_event_in_mes"],
+      "checklist": [
+        {"step": 1, "description": "Inspect conveyor rollers for obstruction", "status": "pending"},
+        {"step": 2, "description": "Verify motor cooling fan operation", "status": "pending"},
+        {"step": 3, "description": "Re-run load test after clearance", "status": "pending"}
+      ],
+      "playbookId": "pb-overload"
+    },
+    "caseTemplate": {
+      "title": "Conveyor load anomaly",
+      "summary": "Motor current spike on assembly line conveyor",
+      "priority": "P2",
+      "assignment": "Operations Command"
+    }
+  }
+]
+
