@@ -74,7 +74,7 @@ services:
       GATEWAY_URL: http://gateway:8088
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-dev}@postgres:5432/halcyon
       POSTGRES_URL: postgresql://postgres:${POSTGRES_PASSWORD:-dev}@postgres:5432/halcyon
-      VT_API_KEY: 3866db54c6032a636dc399c322e0cd56f07be5d750e1b637723067ca0c260793
+      VT_API_KEY: yourkey
     depends_on: [ postgres, ontology, gateway ]
     ports: [ "8091:8091" ]
 
